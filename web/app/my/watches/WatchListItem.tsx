@@ -1,0 +1,65 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { SITE_LABELS, type Site } from '@/lib/types/seat';
+import { SiteLogo } from '@/app/_components/Icons';
+
+interface Item {
+  id: string;
+  site: Site;
+  externalEventId: string;
+  eventDatetime: string;
+  seatSelector: unknown;
+}
+
+function describeSelector(sel: unknown): string {
+  if (typeof sel !== 'object' || !sel) return '';
+  const s = sel as { type?: string; id?: string; time?: string; grade?: string; row?: string };
+  if (s.type === 'seat') return `좌석 ${s.id}`;
+  if (s.type === 'time') return `시간 ${s.time}`;
+  if (s.type === 'grade') return `${s.grade} 등급`;
+  if (s.type === 'row') return `${s.row}열`;
+  if (s.type === 'any') return '아무 빈자리';
+  return '-';
+}
+
+export function WatchListItem({ item }: { item: Item }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [removed, setRemoved] = useState(false);
+
+  async function cancel() {
+    if (!confirm('이 알림을 취소할까요?')) return;
+    const res = await fetch('/api/watch', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id }),
+    });
+    if (res.ok) {
+      setRemoved(true);
+      startTransition(() => router.refresh());
+    } else {
+      alert(`취소 실패: ${res.status}`);
+    }
+  }
+
+  if (removed) return null;
+
+  return (
+    <li className="watch-item">
+      <div className="watch-site">
+        <SiteLogo site={item.site} size={20} />
+        <span className="watch-site-label">{SITE_LABELS[item.site]}</span>
+      </div>
+      <div className="watch-body">
+        <span className="watch-event-id">{item.externalEventId}</span>
+        <span className="dim">{new Date(item.eventDatetime).toLocaleString('ko-KR')}</span>
+        <span className="dim small">{describeSelector(item.seatSelector)}</span>
+      </div>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={cancel} disabled={pending}>
+        {pending ? '취소중...' : '알림 취소'}
+      </button>
+    </li>
+  );
+}

@@ -4,7 +4,6 @@ import { getGroup, encodeGroupKey } from '@/lib/events';
 import { getSnapshot } from '@/lib/snapshot';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
 import { SiteLogo } from './Icons';
-import { Thumbnail } from './Thumbnail';
 import { SeatMap } from './SeatMap';
 import { TimeSlots } from './TimeSlots';
 import { WatchHandler } from './WatchHandler';
@@ -49,7 +48,6 @@ export async function GroupDetail({
   return (
     <div className="group-detail">
       <header className="group-header">
-        <Thumbnail title={group.title} category={group.category} size={88} wide />
         <div className="group-meta">
           <div className="group-meta-top">
             <SiteLogo site={site} size={20} />

@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { listGroups, encodeGroupKey } from '@/lib/events';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
 import { SiteLogo } from './Icons';
-import { Thumbnail } from './Thumbnail';
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString('ko-KR', {
@@ -72,7 +71,6 @@ export async function EventSearch({
             return (
               <li key={g.groupKey}>
                 <Link href={`/${site}/g/${encodeGroupKey(g.groupKey)}`}>
-                  <Thumbnail title={g.title} category={g.category} size={72} wide />
                   <div className="event-card-body">
                     <strong className="event-title">{g.title}</strong>
                     {!isRestaurant && <span className="event-venue">{g.venue}{g.region ? ` · ${g.region}` : ''}</span>}

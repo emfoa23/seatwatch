@@ -46,6 +46,12 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
     }
     if (res.status === 409) {
       const data = await res.json();
+      if (data.error === 'slot_required') {
+        if (confirm(`슬롯이 부족합니다 (사용 ${data.used}/${data.total}). 결제 페이지로 이동할까요?`)) {
+          window.location.href = '/my/billing';
+        }
+        return;
+      }
       setToast({ kind: 'err', text: data.message || '슬롯 부족' });
       return;
     }

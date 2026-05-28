@@ -107,7 +107,8 @@ npm run dev              # http://localhost:3000
 - [x] POST/DELETE /api/watch (zod 검증, 슬롯 부족 시 409)
 - [x] 알림 워커 + Resend 발송 (cooldown SETNX, dedupe DB UNIQUE)
 - [x] CGV crawler MVP (mock fallback)
-- [ ] 토스페이먼츠 결제 (테스트 키 발급 후)
+- [x] 토스페이먼츠 결제 API 개별 연동 (카드 · 토스페이 · 계좌이체 · 가상계좌)
+- [x] /my/watches 알림 취소 UI
 - [ ] 인터파크 (Playwright) · 캐치테이블 crawler 실제 endpoint
 - [ ] monitor-freshness workflow 실 구현
 - [ ] Vercel · Render 배포

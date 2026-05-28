@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { auth, signOut } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { watchTargets, slotInventory } from '@/lib/db/schema';
+import type { Site } from '@/lib/types/seat';
+import { WatchListItem } from './WatchListItem';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +18,7 @@ export default async function WatchesPage() {
     db.query.slotInventory.findFirst({ where: eq(slotInventory.userId, userId) }),
     db.query.watchTargets.findMany({
       where: and(eq(watchTargets.userId, userId), eq(watchTargets.status, 'active')),
+      orderBy: [desc(watchTargets.createdAt)],
     }),
   ]);
 
@@ -48,22 +51,20 @@ export default async function WatchesPage() {
         <div className="empty">
           <p>아직 등록된 알림이 없습니다.</p>
           <p>좌석 페이지에서 마감된 자리를 골라 알림을 등록하세요.</p>
-          <div className="cta-row">
-            <Link href="/cgv/test" className="btn btn-secondary">CGV 둘러보기</Link>
-            <Link href="/interpark/test" className="btn btn-secondary">인터파크</Link>
-            <Link href="/catchtable/test" className="btn btn-secondary">캐치테이블</Link>
-          </div>
         </div>
       ) : (
         <ul className="watch-list">
           {active.map((w) => (
-            <li key={w.id}>
-              <span className={`badge badge-${w.site}`}>{w.site.toUpperCase()}</span>
-              <span>{w.externalEventId}</span>
-              <span className="dim">
-                {new Date(w.eventDatetime).toLocaleString('ko-KR')}
-              </span>
-            </li>
+            <WatchListItem
+              key={w.id}
+              item={{
+                id: w.id,
+                site: w.site as Site,
+                externalEventId: w.externalEventId,
+                eventDatetime: w.eventDatetime.toISOString(),
+                seatSelector: w.seatSelector,
+              }}
+            />
           ))}
         </ul>
       )}
