@@ -296,9 +296,11 @@ a:hover { text-decoration: underline; }
   display: inline-block; padding: 2px 8px; border-radius: 4px;
   font-size: 11px; font-weight: 700; color: #fff;
 }
-.badge-cgv { background: #d32f2f; }
-.badge-interpark { background: #f57c00; }
-.badge-catchtable { background: #4caf50; }
+.badge-cgv { background: #e51937; }
+.badge-megabox { background: #552583; }
+.badge-lotte { background: #ed1c24; }
+.badge-interpark { background: #ff6f00; }
+.badge-catchtable { background: #1ab050; }
 
 .seatmap, .timeslots { background: #fff; padding: 20px; border-radius: 10px; border: 1px solid #e5e7eb; }
 .seatmap-summary { display: flex; gap: 16px; font-size: 13px; margin-bottom: 12px; color: #374151; }
