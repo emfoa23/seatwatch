@@ -20,12 +20,9 @@ interface Props {
   recent: RecentPayment[];
 }
 
-type Method = '카드' | '계좌이체' | '가상계좌' | '토스페이';
+type Method = '카드';
 const METHODS: { id: Method; label: string }[] = [
   { id: '카드', label: '신용/체크카드' },
-  { id: '토스페이', label: '토스페이' },
-  { id: '계좌이체', label: '계좌이체' },
-  { id: '가상계좌', label: '가상계좌' },
 ];
 
 export function BillingClient({ free, paid, pricePerSlot, email, recent }: Props) {
@@ -94,20 +91,18 @@ export function BillingClient({ free, paid, pricePerSlot, email, recent }: Props
       </section>
 
       <section className="billing-methods">
-        <h2>결제수단 선택</h2>
-        <div className="method-grid">
-          {METHODS.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className="method-btn"
-              disabled={pending !== null}
-              onClick={() => pay(m.id)}
-            >
-              {pending === m.id ? '결제창 준비중...' : m.label}
-            </button>
-          ))}
-        </div>
+        {METHODS.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            className="btn btn-primary btn-pay"
+            disabled={pending !== null}
+            onClick={() => pay(m.id)}
+          >
+            {pending === m.id ? '결제창 준비중...' : `${total.toLocaleString()}원 결제하기`}
+          </button>
+        ))}
+        <p className="method-note">결제창에서 카드 외에도 토스페이·카카오페이·계좌이체 등을 선택할 수 있습니다.</p>
         {err && <p className="auth-error" style={{ marginTop: 12 }}>{err}</p>}
       </section>
 

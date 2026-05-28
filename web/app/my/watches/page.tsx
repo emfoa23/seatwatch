@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { eq, and, desc } from 'drizzle-orm';
-import { auth, signOut } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { watchTargets, slotInventory } from '@/lib/db/schema';
 import type { Site } from '@/lib/types/seat';
@@ -10,9 +9,7 @@ import { WatchListItem } from './WatchListItem';
 export const dynamic = 'force-dynamic';
 
 export default async function WatchesPage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect('/login?callbackUrl=/my/watches');
-
+  const session = (await auth())!;
   const userId = session.user.id;
   const [inventory, active] = await Promise.all([
     db.query.slotInventory.findFirst({ where: eq(slotInventory.userId, userId) }),
@@ -24,23 +21,9 @@ export default async function WatchesPage() {
 
   const totalSlots = (inventory?.freeSlots ?? 0) + (inventory?.paidSlots ?? 0);
 
-  async function doSignOut() {
-    'use server';
-    await signOut({ redirectTo: '/' });
-  }
-
   return (
     <div className="my-watches">
-      <header className="my-header">
-        <div>
-          <h1>내 알림</h1>
-          <p className="hello">{session.user.email}</p>
-        </div>
-        <form action={doSignOut}>
-          <button type="submit" className="btn btn-secondary">로그아웃</button>
-        </form>
-      </header>
-
+      <h1>내 알림</h1>
       <div className="slot-summary">
         <span>사용 {active.length} / 보유 {totalSlots}</span>
         <span className="dim">무료 {inventory?.freeSlots ?? 0} · 추가 {inventory?.paidSlots ?? 0}</span>

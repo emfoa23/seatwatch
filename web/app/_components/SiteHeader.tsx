@@ -26,12 +26,7 @@ export async function SiteHeader() {
         ))}
         <div className="nav-spacer" />
         {loggedIn ? (
-          <>
-            <Link href="/my/watches" className="nav-link nav-link-plain">내 알림</Link>
-            <form action={logoutAction} className="logout-form">
-              <button type="submit" className="link-button">로그아웃</button>
-            </form>
-          </>
+          <Link href="/my" className="nav-link nav-link-plain">마이페이지</Link>
         ) : (
           <Link href="/login" className="nav-link nav-link-plain">로그인</Link>
         )}

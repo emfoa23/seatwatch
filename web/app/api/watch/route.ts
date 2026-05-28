@@ -9,13 +9,21 @@ const bodySchema = z.object({
   site: z.enum(['cgv', 'megabox', 'lotte', 'interpark', 'catchtable']),
   externalEventId: z.string().min(1),
   eventDatetime: z.string().min(1),
-  seatSelector: z.object({
-    type: z.enum(['seat', 'time', 'grade', 'row', 'any']),
-    id: z.string().optional(),
-    time: z.string().optional(),
-    grade: z.string().optional(),
-    row: z.string().optional(),
-  }),
+  seatSelector: z.union([
+    z.object({
+      type: z.literal('multi'),
+      values: z.array(z.string().min(1)).min(1).max(20),
+      adjacency: z.number().int().min(1).max(10).default(1),
+      mode: z.enum(['seat', 'time']),
+    }),
+    z.object({
+      type: z.enum(['seat', 'time', 'grade', 'row', 'any']),
+      id: z.string().optional(),
+      time: z.string().optional(),
+      grade: z.string().optional(),
+      row: z.string().optional(),
+    }),
+  ]),
 });
 
 export async function POST(req: NextRequest) {

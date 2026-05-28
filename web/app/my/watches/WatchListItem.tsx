@@ -15,7 +15,22 @@ interface Item {
 
 function describeSelector(sel: unknown): string {
   if (typeof sel !== 'object' || !sel) return '';
-  const s = sel as { type?: string; id?: string; time?: string; grade?: string; row?: string };
+  const s = sel as {
+    type?: string;
+    id?: string;
+    time?: string;
+    grade?: string;
+    row?: string;
+    values?: string[];
+    adjacency?: number;
+    mode?: 'seat' | 'time';
+  };
+  if (s.type === 'multi' && s.values) {
+    const label = s.mode === 'time' ? '시간' : '좌석';
+    const adj = (s.adjacency ?? 1) > 1 ? ` · ${s.adjacency}명 연속` : '';
+    const preview = s.values.slice(0, 3).join(', ') + (s.values.length > 3 ? ` 외 ${s.values.length - 3}` : '');
+    return `${label} ${preview}${adj}`;
+  }
   if (s.type === 'seat') return `좌석 ${s.id}`;
   if (s.type === 'time') return `시간 ${s.time}`;
   if (s.type === 'grade') return `${s.grade} 등급`;

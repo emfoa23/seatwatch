@@ -9,11 +9,38 @@ export async function indexEvent(entry: EventIndexEntry): Promise<void> {
   await valkey.hset(EVENT_INDEX_KEY(entry.site), entry.externalEventId, JSON.stringify(entry));
 }
 
-export async function listEvents(site: Site, query?: string, limit = 100): Promise<EventIndexEntry[]> {
+export interface EventFilters {
+  query?: string;
+  dateFrom?: string; // YYYY-MM-DD
+  dateTo?: string;   // YYYY-MM-DD
+  timeFrom?: string; // HH:MM
+  timeTo?: string;   // HH:MM
+}
+
+function timeOf(iso: string): string {
+  // local time HH:MM from ISO datetime
+  const d = new Date(iso);
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function dayOf(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${da}`;
+}
+
+export async function listEvents(site: Site, queryOrFilters?: string | EventFilters, limit = 100): Promise<EventIndexEntry[]> {
+  const filters: EventFilters = typeof queryOrFilters === 'string'
+    ? { query: queryOrFilters }
+    : (queryOrFilters ?? {});
   const map = await valkey.hgetall(EVENT_INDEX_KEY(site));
   const items: EventIndexEntry[] = Object.values(map).map((s) => JSON.parse(s));
-  const q = query?.trim().toLowerCase();
-  const filtered = q
+  const q = filters.query?.trim().toLowerCase();
+  let filtered = q
     ? items.filter(
         (e) =>
           e.title.toLowerCase().includes(q) ||
@@ -22,6 +49,18 @@ export async function listEvents(site: Site, query?: string, limit = 100): Promi
           (e.category ?? '').toLowerCase().includes(q),
       )
     : items;
+  if (filters.dateFrom) {
+    filtered = filtered.filter((e) => dayOf(e.eventDatetime) >= filters.dateFrom!);
+  }
+  if (filters.dateTo) {
+    filtered = filtered.filter((e) => dayOf(e.eventDatetime) <= filters.dateTo!);
+  }
+  if (filters.timeFrom) {
+    filtered = filtered.filter((e) => timeOf(e.eventDatetime) >= filters.timeFrom!);
+  }
+  if (filters.timeTo) {
+    filtered = filtered.filter((e) => timeOf(e.eventDatetime) <= filters.timeTo!);
+  }
   filtered.sort((a, b) => a.eventDatetime.localeCompare(b.eventDatetime));
   return filtered.slice(0, limit);
 }
@@ -62,8 +101,8 @@ export function decodeGroupKey(encoded: string): string {
   return Buffer.from(encoded, 'base64url').toString('utf-8');
 }
 
-export async function listGroups(site: Site, query?: string, limit = 100): Promise<EventGroup[]> {
-  const all = await listEvents(site, query, 2000);
+export async function listGroups(site: Site, filters?: string | EventFilters, limit = 100): Promise<EventGroup[]> {
+  const all = await listEvents(site, filters, 2000);
   const map = new Map<string, EventGroup>();
   for (const e of all) {
     const key = groupKeyOf(e);

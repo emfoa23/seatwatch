@@ -21,7 +21,8 @@ export function SeatMap({ snapshot }: { snapshot: SeatSnapshot }) {
         <span className="dim">마감 {total - available}석</span>
       </div>
       <div className="screen">SCREEN</div>
-      <div className="seat-rows">
+      <div className="seatmap-scroll">
+        <div className="seat-rows">
         {rows.map((row) => (
           <div key={row} className="seat-row">
             <span className="row-label">{row}</span>
@@ -44,6 +45,7 @@ export function SeatMap({ snapshot }: { snapshot: SeatSnapshot }) {
             </div>
           </div>
         ))}
+        </div>
       </div>
       <div className="seat-legend">
         <span><i className="swatch swatch-available" /> 예매가능</span>

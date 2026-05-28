@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { listGroups, encodeGroupKey } from '@/lib/events';
+import { listGroups, encodeGroupKey, type EventFilters } from '@/lib/events';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
 import { SiteLogo } from './Icons';
 
@@ -13,14 +13,6 @@ function fmt(iso: string): string {
   });
 }
 
-function fmtDateOnly(iso: string): string {
-  return new Date(iso).toLocaleDateString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    weekday: 'short',
-  });
-}
-
 function uniqueDates(entries: { eventDatetime: string }[]): number {
   const set = new Set(entries.map((e) => e.eventDatetime.slice(0, 10)));
   return set.size;
@@ -28,15 +20,14 @@ function uniqueDates(entries: { eventDatetime: string }[]): number {
 
 export async function EventSearch({
   site,
-  query,
+  filters,
   placeholder,
 }: {
   site: Site;
-  query?: string;
+  filters: EventFilters;
   placeholder: string;
 }) {
-  const groups = await listGroups(site, query, 200);
-  const isRestaurant = site === 'catchtable';
+  const groups = await listGroups(site, filters, 200);
 
   return (
     <div className="search-page">
@@ -45,20 +36,45 @@ export async function EventSearch({
           <SiteLogo site={site} size={28} />
           {SITE_LABELS[site]}
         </h1>
-        <form className="search-form" action={`/${site}`}>
+      </header>
+
+      <form className="filter-form" action={`/${site}`}>
+        <div className="filter-row">
           <input
             name="q"
             type="search"
             placeholder={placeholder}
-            defaultValue={query ?? ''}
+            defaultValue={filters.query ?? ''}
             autoComplete="off"
+            className="filter-q"
           />
           <button type="submit" className="btn btn-primary">검색</button>
-        </form>
-      </header>
+        </div>
+        <details className="filter-extra" open={!!(filters.dateFrom || filters.dateTo || filters.timeFrom || filters.timeTo)}>
+          <summary>날짜·시간 필터</summary>
+          <div className="filter-grid">
+            <label>
+              <span>날짜 시작</span>
+              <input name="date_from" type="date" defaultValue={filters.dateFrom ?? ''} />
+            </label>
+            <label>
+              <span>날짜 끝</span>
+              <input name="date_to" type="date" defaultValue={filters.dateTo ?? ''} />
+            </label>
+            <label>
+              <span>시간 시작</span>
+              <input name="time_from" type="time" defaultValue={filters.timeFrom ?? ''} />
+            </label>
+            <label>
+              <span>시간 끝</span>
+              <input name="time_to" type="time" defaultValue={filters.timeTo ?? ''} />
+            </label>
+          </div>
+        </details>
+      </form>
 
       <p className="search-count">
-        {query ? `"${query}" 검색 결과 ` : ''}{groups.length}건
+        {filters.query ? `"${filters.query}" 검색 결과 ` : ''}{groups.length}건
       </p>
 
       {groups.length === 0 ? (
@@ -68,6 +84,7 @@ export async function EventSearch({
           {groups.map((g) => {
             const dateCount = uniqueDates(g.entries);
             const next = g.entries[0];
+            const isRestaurant = site === 'catchtable';
             return (
               <li key={g.groupKey}>
                 <Link href={`/${site}/g/${encodeGroupKey(g.groupKey)}`}>
@@ -92,5 +109,3 @@ export async function EventSearch({
     </div>
   );
 }
-
-export { fmt, fmtDateOnly };
