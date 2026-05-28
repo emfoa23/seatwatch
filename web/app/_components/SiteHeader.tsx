@@ -1,5 +1,9 @@
 import Link from 'next/link';
 import { auth, signOut } from '@/lib/auth';
+import { SITE_LABELS, type Site } from '@/lib/types/seat';
+import { SiteLogo } from './Icons';
+
+const NAV_SITES: Site[] = ['cgv', 'megabox', 'lotte', 'interpark', 'catchtable'];
 
 async function logoutAction() {
   'use server';
@@ -13,19 +17,23 @@ export async function SiteHeader() {
   return (
     <header className="site-header">
       <Link href="/" className="brand">seatwatch</Link>
-      <nav>
-        <Link href="/cgv">CGV</Link>
-        <Link href="/megabox">메가박스</Link>
-        <Link href="/lotte">롯데시네마</Link>
-        <Link href="/interpark">인터파크</Link>
-        <Link href="/catchtable">캐치테이블</Link>
-        {loggedIn && <Link href="/my/watches">내 알림</Link>}
+      <nav className="site-nav">
+        {NAV_SITES.map((s) => (
+          <Link key={s} href={`/${s}`} className="nav-link">
+            <SiteLogo site={s} size={18} />
+            <span>{SITE_LABELS[s]}</span>
+          </Link>
+        ))}
+        <div className="nav-spacer" />
         {loggedIn ? (
-          <form action={logoutAction} className="logout-form">
-            <button type="submit" className="link-button">로그아웃</button>
-          </form>
+          <>
+            <Link href="/my/watches" className="nav-link nav-link-plain">내 알림</Link>
+            <form action={logoutAction} className="logout-form">
+              <button type="submit" className="link-button">로그아웃</button>
+            </form>
+          </>
         ) : (
-          <Link href="/login">로그인</Link>
+          <Link href="/login" className="nav-link nav-link-plain">로그인</Link>
         )}
       </nav>
     </header>

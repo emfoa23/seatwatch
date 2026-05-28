@@ -4,15 +4,22 @@ config({ path: '.env.local' });
 
 import { generateAllMockData } from '@/lib/mock-data';
 import { setSnapshot } from '@/lib/snapshot';
-import { indexEvent } from '@/lib/events';
+import { indexEvent, EVENT_INDEX_KEY } from '@/lib/events';
 import { valkey } from '@/lib/valkey';
 import { db } from '@/lib/db';
 import { eventsMeta } from '@/lib/db/schema';
 import { sql } from 'drizzle-orm';
+import type { Site } from '@/lib/types/seat';
 
 async function main() {
   const all = generateAllMockData();
   console.log(`Seeding ${all.length} mock events to Valkey + Neon events_meta...`);
+
+  const sites: Site[] = ['cgv', 'megabox', 'lotte', 'interpark', 'catchtable'];
+  for (const s of sites) {
+    await valkey.del(EVENT_INDEX_KEY(s));
+  }
+  console.log(`Cleared events index for ${sites.length} sites.`);
 
   let n = 0;
   for (const { entry, snapshot } of all) {

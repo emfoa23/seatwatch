@@ -1,6 +1,8 @@
 import Link from 'next/link';
-import { listEvents } from '@/lib/events';
+import { listGroups, encodeGroupKey } from '@/lib/events';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
+import { SiteLogo } from './Icons';
+import { Thumbnail } from './Thumbnail';
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString('ko-KR', {
@@ -12,6 +14,19 @@ function fmt(iso: string): string {
   });
 }
 
+function fmtDateOnly(iso: string): string {
+  return new Date(iso).toLocaleDateString('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  });
+}
+
+function uniqueDates(entries: { eventDatetime: string }[]): number {
+  const set = new Set(entries.map((e) => e.eventDatetime.slice(0, 10)));
+  return set.size;
+}
+
 export async function EventSearch({
   site,
   query,
@@ -21,12 +36,16 @@ export async function EventSearch({
   query?: string;
   placeholder: string;
 }) {
-  const events = await listEvents(site, query, 200);
+  const groups = await listGroups(site, query, 200);
+  const isRestaurant = site === 'catchtable';
 
   return (
     <div className="search-page">
       <header className="search-header">
-        <h1>{SITE_LABELS[site]}</h1>
+        <h1 className="search-title">
+          <SiteLogo site={site} size={28} />
+          {SITE_LABELS[site]}
+        </h1>
         <form className="search-form" action={`/${site}`}>
           <input
             name="q"
@@ -40,28 +59,40 @@ export async function EventSearch({
       </header>
 
       <p className="search-count">
-        {query ? `"${query}" 검색 결과 ` : ''}{events.length}건
+        {query ? `"${query}" 검색 결과 ` : ''}{groups.length}건
       </p>
 
-      {events.length === 0 ? (
+      {groups.length === 0 ? (
         <p className="empty">결과가 없습니다.</p>
       ) : (
         <ul className="event-list">
-          {events.map((e) => (
-            <li key={e.externalEventId}>
-              <Link href={`/${site}/${encodeURIComponent(e.externalEventId)}`}>
-                <span className={`badge badge-${site}`}>{SITE_LABELS[site]}</span>
-                <div className="event-card-body">
-                  <strong className="event-title">{e.title}</strong>
-                  <span className="event-venue">{e.venue}{e.region ? ` · ${e.region}` : ''}</span>
-                  <span className="event-datetime">{fmt(e.eventDatetime)}</span>
-                  {e.category && <span className="event-category">{e.category}</span>}
-                </div>
-              </Link>
-            </li>
-          ))}
+          {groups.map((g) => {
+            const dateCount = uniqueDates(g.entries);
+            const next = g.entries[0];
+            return (
+              <li key={g.groupKey}>
+                <Link href={`/${site}/g/${encodeGroupKey(g.groupKey)}`}>
+                  <Thumbnail title={g.title} category={g.category} size={72} wide />
+                  <div className="event-card-body">
+                    <strong className="event-title">{g.title}</strong>
+                    {!isRestaurant && <span className="event-venue">{g.venue}{g.region ? ` · ${g.region}` : ''}</span>}
+                    {isRestaurant && <span className="event-venue">{g.venue}</span>}
+                    <span className="event-datetime">
+                      가장 빠른 일정: {fmt(next.eventDatetime)}
+                    </span>
+                    <span className="event-meta">
+                      {dateCount}일 · {g.entries.length}회차
+                      {g.category && <span className="event-category">{g.category}</span>}
+                    </span>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
   );
 }
+
+export { fmt, fmtDateOnly };

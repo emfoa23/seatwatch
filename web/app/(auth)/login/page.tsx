@@ -1,5 +1,6 @@
 import { signIn } from '@/lib/auth';
 import Link from 'next/link';
+import { GoogleIcon, KakaoIcon, NaverIcon } from '@/app/_components/Icons';
 
 export default async function LoginPage({
   searchParams,
@@ -37,13 +38,19 @@ export default async function LoginPage({
 
       <div className="oauth-buttons">
         <form action={oauthGoogle}>
-          <button type="submit" className="btn btn-google">Google 로 계속</button>
+          <button type="submit" className="btn btn-google">
+            <GoogleIcon /> <span>Google 로 계속</span>
+          </button>
         </form>
         <form action={oauthKakao}>
-          <button type="submit" className="btn btn-kakao">Kakao 로 계속</button>
+          <button type="submit" className="btn btn-kakao">
+            <KakaoIcon /> <span>카카오로 계속</span>
+          </button>
         </form>
         <form action={oauthNaver}>
-          <button type="submit" className="btn btn-naver">Naver 로 계속</button>
+          <button type="submit" className="btn btn-naver">
+            <NaverIcon /> <span>네이버로 계속</span>
+          </button>
         </form>
       </div>
 
