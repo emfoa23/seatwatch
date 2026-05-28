@@ -102,7 +102,7 @@ export function BillingClient({ free, paid, pricePerSlot, email, recent }: Props
             {pending === m.id ? '결제창 준비중...' : `${total.toLocaleString()}원 결제하기`}
           </button>
         ))}
-        <p className="method-note">결제창에서 카드 외에도 토스페이·카카오페이·계좌이체 등을 선택할 수 있습니다.</p>
+        <p className="method-note">간편결제 · 신용/체크카드 모두 가능 (결제창에서 선택)</p>
         {err && <p className="auth-error" style={{ marginTop: 12 }}>{err}</p>}
       </section>
 

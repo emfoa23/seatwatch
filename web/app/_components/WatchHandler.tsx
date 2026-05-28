@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type MouseEvent, type ReactNode } from 'react';
+import { useState, useTransition, type MouseEvent, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Site } from '@/lib/types/seat';
 
 interface Props {
@@ -15,6 +16,8 @@ const MAX_SEATS = 20;
 const MAX_OPT = 10;
 
 export function WatchHandler({ site, externalEventId, eventDatetime, selectorMode, children }: Props) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<string[]>([]);
   const [adjacency, setAdjacency] = useState(1);
   const [partySize, setPartySize] = useState(2);
@@ -100,6 +103,7 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
         text: `알림 등록 완료! 빈자리 발생 시 메일로 안내드립니다.`,
       });
       clearSelection();
+      startTransition(() => router.refresh());
       return;
     }
     const body = await res.text();

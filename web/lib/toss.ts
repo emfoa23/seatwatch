@@ -3,7 +3,9 @@ const SLOT_PRICE_KRW = 1000;
 
 export const PAYMENT = {
   SLOT_PRICE_KRW,
-  SLOT_LABEL: 'seatwatch 알림 슬롯 1개',
+  orderName(slots: number) {
+    return `알림 슬롯 ${slots}개`;
+  },
 };
 
 interface ConfirmInput {

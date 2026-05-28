@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { auth } from './auth';
 import { db } from './db';
 import { watchTargets } from './db/schema';
@@ -12,19 +12,7 @@ export interface WatchContext {
   partySize?: number;
 }
 
-export async function loadWatchContext(site: Site, externalEventId: string, watchIdParam?: string): Promise<WatchContext | null> {
-  if (!watchIdParam) return null;
-  const session = await auth();
-  if (!session?.user?.id) return null;
-  const w = await db.query.watchTargets.findFirst({
-    where: and(
-      eq(watchTargets.id, watchIdParam),
-      eq(watchTargets.userId, session.user.id),
-      eq(watchTargets.site, site),
-      eq(watchTargets.externalEventId, externalEventId),
-    ),
-  });
-  if (!w) return null;
+function toContext(w: { id: string; seatSelector: unknown }): WatchContext {
   const sel = w.seatSelector as {
     type?: string;
     values?: string[];
@@ -50,4 +38,28 @@ export async function loadWatchContext(site: Site, externalEventId: string, watc
     return { watchId: w.id, registered: [sel.time], selectorKind: 'single' };
   }
   return { watchId: w.id, registered: [], selectorKind: 'single' };
+}
+
+export async function loadAllWatchContexts(site: Site, externalEventId: string): Promise<WatchContext[]> {
+  const session = await auth();
+  if (!session?.user?.id) return [];
+  const list = await db.query.watchTargets.findMany({
+    where: and(
+      eq(watchTargets.userId, session.user.id),
+      eq(watchTargets.site, site),
+      eq(watchTargets.externalEventId, externalEventId),
+      eq(watchTargets.status, 'active'),
+    ),
+    orderBy: [desc(watchTargets.createdAt)],
+  });
+  return list.map(toContext);
+}
+
+export function resolveHighlight(contexts: WatchContext[], activeWatchId?: string): string[] {
+  if (activeWatchId) {
+    const found = contexts.find((c) => c.watchId === activeWatchId);
+    return found?.registered ?? [];
+  }
+  // 전체 — 모든 watch 의 자리 합집합
+  return Array.from(new Set(contexts.flatMap((c) => c.registered)));
 }

@@ -10,20 +10,48 @@ a { color: #2563eb; text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 .site-header {
-  display: flex; align-items: center; gap: 24px;
-  padding: 12px 20px; background: #fff; border-bottom: 1px solid #e5e7eb;
-  position: sticky; top: 0; z-index: 50; flex-wrap: wrap;
+  background: #fff; border-bottom: 1px solid #e5e7eb;
+  position: sticky; top: 0; z-index: 50;
+}
+.site-header-top {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 20px; max-width: 1200px; margin: 0 auto;
 }
 .brand { font-weight: 800; font-size: 18px; color: #111; flex-shrink: 0; }
 .brand:hover { text-decoration: none; }
-.site-nav { display: flex; gap: 4px; font-size: 13px; align-items: center; flex: 1; flex-wrap: wrap; }
+.site-nav { display: flex; gap: 4px; font-size: 13px; align-items: center; }
+.site-nav-desktop { flex: 1; }
 .nav-link {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px;
   color: #374151; white-space: nowrap; word-break: keep-all;
+  background: none; border: none; font: inherit; cursor: pointer;
 }
 .nav-link:hover { background: #f3f4f6; text-decoration: none; }
 .nav-link-plain { color: #2563eb; }
 .nav-spacer { flex: 1; min-width: 12px; }
+
+.hamburger {
+  display: none;
+  width: 36px; height: 36px; border: 1px solid #e5e7eb; border-radius: 6px;
+  background: #fff; cursor: pointer; padding: 8px; margin-left: auto;
+  flex-direction: column; justify-content: space-between; gap: 4px;
+}
+.hamburger span {
+  display: block; height: 2px; background: #111; border-radius: 1px;
+}
+
+.site-nav-drawer {
+  display: none; flex-direction: column; gap: 2px; padding: 8px 16px 16px;
+  border-top: 1px solid #f3f4f6; background: #fff;
+}
+.site-nav-drawer .nav-link { padding: 10px 12px; }
+.drawer-divider { border: none; border-top: 1px solid #f3f4f6; margin: 6px 0; }
+
+@media (max-width: 720px) {
+  .site-nav-desktop { display: none; }
+  .hamburger { display: flex; }
+  .site-nav-drawer { display: flex; }
+}
 .site-logo {
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 4px; font-weight: 800; line-height: 1; letter-spacing: -0.5px;
@@ -167,6 +195,9 @@ a:hover { text-decoration: underline; }
 .profile-form .hint { color: #9ca3af; font-weight: normal; }
 .msg-ok { color: #166534; font-size: 12px; margin: 0; }
 .msg-err { color: #b91c1c; font-size: 12px; margin: 0; }
+.profile-banner { font-size: 13px; padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; }
+.profile-banner.msg-ok { background: #dcfce7; }
+.profile-banner.msg-err { background: #fef2f2; }
 
 .oauth-linked-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .oauth-linked-list li {
@@ -175,16 +206,25 @@ a:hover { text-decoration: underline; }
 }
 .oauth-link-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 
+.watch-banner-list { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+.watch-banner-heading { font-size: 12px; color: #6b7280; margin: 0 0 2px; font-weight: 600; }
 .watch-banner {
   background: #fef3c7; border: 1px solid #fbbf24; color: #92400e;
-  padding: 10px 14px; border-radius: 8px; margin-bottom: 14px;
+  padding: 10px 14px; border-radius: 8px;
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px;
+  cursor: pointer; transition: all 0.1s;
+}
+.watch-banner:hover { background: #fde68a; }
+.watch-banner-active {
+  background: #fbbf24; color: #78350f; border-color: #d97706;
+  box-shadow: 0 0 0 2px #fbbf24;
 }
 .watch-banner-tag {
   background: #92400e; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px;
 }
-.watch-banner-desc { font-weight: 600; }
-.watch-banner-hint { color: #b45309; font-size: 12px; margin-left: auto; }
+.watch-banner-desc { font-weight: 600; flex: 1; min-width: 0; }
+.watch-banner-cancel { margin-left: auto; }
+.watch-banner-hint { color: #b45309; font-size: 12px; margin: 4px 0 0; }
 
 .payment-result {
   max-width: 520px; margin: 60px auto; padding: 32px;
@@ -332,7 +372,8 @@ a:hover { text-decoration: underline; }
   position: sticky; top: 80px; align-self: flex-start;
 }
 .my-user { padding-bottom: 12px; border-bottom: 1px solid #f3f4f6; margin-bottom: 12px; }
-.my-user-email { margin: 0 0 6px; font-size: 13px; color: #111; word-break: break-all; }
+.my-user-name { margin: 0 0 2px; font-size: 14px; font-weight: 700; color: #111; }
+.my-user-email { margin: 0 0 6px; font-size: 12px; color: #6b7280; word-break: break-all; }
 .my-nav { display: flex; flex-direction: column; gap: 2px; }
 .my-nav a {
   padding: 8px 10px; border-radius: 6px; color: #374151; font-size: 14px;

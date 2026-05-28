@@ -73,17 +73,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           eq(oauthAccounts.providerAccountId, account.providerAccountId)
         ),
       });
-      if (linked) {
-        user.id = linked.userId;
-        return true;
-      }
 
       const jar = await cookies();
       const linkUserId = jar.get('link_oauth_user_id')?.value;
       const allowSignup = jar.get('oauth_signup_allowed')?.value === '1';
 
-      // Case 1: 마이페이지에서 OAuth 추가 연동 (로그인 상태 유지)
+      // 마이페이지 추가 연동 flow
       if (linkUserId) {
+        if (linked) {
+          jar.delete('link_oauth_user_id');
+          if (linked.userId !== linkUserId) {
+            // 이미 다른 계정에 연동된 OAuth
+            return `/my/profile?error=oauth_taken&provider=${account.provider}`;
+          }
+          // 본인에 이미 연동돼있음 — 정상 로그인 + notice
+          user.id = linked.userId;
+          return `/my/profile?notice=already_linked&provider=${account.provider}`;
+        }
+        const sameEmail = await db.query.users.findFirst({ where: eq(users.email, email) });
+        if (sameEmail && sameEmail.id !== linkUserId) {
+          jar.delete('link_oauth_user_id');
+          return `/my/profile?error=email_taken&provider=${account.provider}`;
+        }
         await db.insert(oauthAccounts).values({
           userId: linkUserId,
           provider: account.provider,
@@ -91,10 +102,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
         jar.delete('link_oauth_user_id');
         user.id = linkUserId;
+        return `/my/profile?notice=linked&provider=${account.provider}`;
+      }
+
+      // 일반 로그인 flow — 이미 연동된 OAuth 면 그 계정으로 로그인
+      if (linked) {
+        user.id = linked.userId;
         return true;
       }
 
-      // Case 2: 같은 email 의 기존 user 자동 link (편의)
+      // 같은 email 의 기존 user 자동 link (편의 — email 인증을 신뢰)
       const existingByEmail = await db.query.users.findFirst({ where: eq(users.email, email) });
       if (existingByEmail) {
         await db.insert(oauthAccounts).values({
@@ -106,7 +123,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return true;
       }
 
-      // Case 3: 신규. 가입 허용 cookie 있으면 가입, 없으면 거부 + 안내 페이지
+      // 신규: 가입 허용 cookie 있어야 진행
       if (!allowSignup) {
         return `/login?error=signup_required&provider=${account.provider}`;
       }

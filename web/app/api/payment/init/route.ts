@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     paymentId: created.id,
     orderId,
     amount,
-    orderName: `${PAYMENT.SLOT_LABEL}${parsed.data.slots > 1 ? ` x ${parsed.data.slots}` : ''}`,
+    orderName: PAYMENT.orderName(parsed.data.slots),
     customerEmail: session.user.email,
     clientKey: process.env.TOSS_CLIENT_KEY,
   });

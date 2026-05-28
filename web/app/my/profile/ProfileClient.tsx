@@ -15,14 +15,28 @@ interface Linked {
   provider: string;
 }
 
+interface Banner {
+  kind: 'ok' | 'err';
+  code: string;
+  provider?: string;
+}
+
 interface Props {
   email: string;
   displayName: string;
   hasPassword: boolean;
   linkedProviders: Linked[];
+  banner: Banner | null;
 }
 
-export function ProfileClient({ email, displayName, hasPassword, linkedProviders }: Props) {
+const BANNER_MSG: Record<string, string> = {
+  linked: '연동 완료.',
+  already_linked: '이미 연결된 계정입니다.',
+  oauth_taken: '이 OAuth 계정은 다른 seatwatch 계정에 이미 연결되어 있습니다.',
+  email_taken: '같은 이메일을 사용하는 다른 계정이 이미 있습니다.',
+};
+
+export function ProfileClient({ email, displayName, hasPassword, linkedProviders, banner }: Props) {
   const [, startTransition] = useTransition();
   const [name, setName] = useState(displayName);
   const [nameMsg, setNameMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -54,9 +68,14 @@ export function ProfileClient({ email, displayName, hasPassword, linkedProviders
     if (r.ok) startTransition(() => window.location.reload());
   }
 
+  const bannerText = banner ? (BANNER_MSG[banner.code] ?? banner.code) + (banner.provider ? ` (${PROVIDER_LABEL[banner.provider] ?? banner.provider})` : '') : null;
+
   return (
     <div className="profile-page">
       <h1>프로필 편집</h1>
+      {bannerText && (
+        <p className={banner!.kind === 'ok' ? 'msg-ok profile-banner' : 'msg-err profile-banner'}>{bannerText}</p>
+      )}
 
       <section className="profile-section">
         <h2>기본 정보</h2>

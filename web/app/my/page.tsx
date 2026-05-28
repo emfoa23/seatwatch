@@ -42,7 +42,7 @@ export default async function MyHome() {
         <Link href="/my/billing" className="dash-card">
           <span className="dash-label">슬롯 추가</span>
           <strong>+ 1,000원/슬롯</strong>
-          <span className="dim small">신용카드 / 토스페이 / 카카오페이</span>
+          <span className="dim small">간편결제 · 신용·체크카드</span>
         </Link>
         <Link href="/my/payments" className="dash-card">
           <span className="dash-label">최근 결제</span>
