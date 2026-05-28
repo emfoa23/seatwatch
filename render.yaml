@@ -1,0 +1,37 @@
+# Render Blueprint — seatwatch worker
+# 알림 큐 consumer (Valkey BRPOP → Resend 호출).
+# web (Next.js) 는 Vercel 배포 — 이 파일에는 포함하지 않음.
+#
+# 배포 방법:
+#   1. Render 대시보드 → New → Blueprint → 이 repo 연결
+#   2. workspace 별 secrets (VALKEY_URL, DATABASE_URL, RESEND_API_KEY, RESEND_FROM_EMAIL) 등록
+#   3. main push 시 자동 재배포
+#
+# 기존 Brian 패턴 답습: workspace 별로 별도 인스턴스 (use-sehee / use-brian 토글),
+# Valkey/DB prefix 로 격리.
+
+services:
+  - type: worker
+    name: seatwatch-worker
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: worker
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VALKEY_KEY_PREFIX
+        value: seatwatch:prod
+      - key: DATABASE_URL
+        sync: false
+      - key: VALKEY_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false

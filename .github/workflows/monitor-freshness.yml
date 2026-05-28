@@ -1,0 +1,30 @@
+name: monitor-freshness
+
+# Brian/monitor-infra 패턴 답습:
+# cron-job.org → workflow_dispatch (15분마다) → Valkey/Neon 신선도 체크
+# → 임계 초과 시 GitHub Issue 자동 생성 → metrics/YYYY-MM-DD.json 커밋
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [monitor]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Placeholder
+        run: |
+          echo "monitor-freshness placeholder."
+          echo "구현 예정 체크 항목:"
+          echo " - Valkey freshness:<site>:<id> 30분 이상 stale"
+          echo " - 직전 1시간 crawl_jobs 실패율 > 30%"
+          echo " - watch_targets last_checked_at 10분 이상 stale"
+          echo " - Resend 발송 성공률 < 90%"
+          echo "임계 초과 시: gh issue create (label monitor, cooldown)"
