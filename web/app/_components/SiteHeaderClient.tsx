@@ -43,7 +43,12 @@ export function SiteHeaderClient({ loggedIn, logoutAction }: Props) {
           ))}
           <div className="nav-spacer" />
           {loggedIn ? (
-            <Link href="/my" className="nav-link nav-link-plain">마이페이지</Link>
+            <>
+              <Link href="/my" className="nav-link nav-link-plain">마이페이지</Link>
+              <form action={logoutAction}>
+                <button type="submit" className="nav-link nav-link-plain">로그아웃</button>
+              </form>
+            </>
           ) : (
             <Link href="/login" className="nav-link nav-link-plain">로그인</Link>
           )}

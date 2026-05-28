@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
-import { users, slotInventory } from '@/lib/db/schema';
+import { users, slotInventory, oauthAccounts } from '@/lib/db/schema';
 import { signIn } from '@/lib/auth';
 import { GoogleIcon, KakaoIcon, NaverIcon } from '@/app/_components/Icons';
 
@@ -30,7 +30,14 @@ async function signupAction(formData: FormData) {
   const existing = await db.query.users.findFirst({
     where: eq(users.email, parsed.data.email),
   });
-  if (existing) redirect('/signup?error=already_exists');
+  if (existing) {
+    const accounts = await db.query.oauthAccounts.findMany({
+      where: eq(oauthAccounts.userId, existing.id),
+    });
+    const providers = accounts.map((a) => a.provider).join(',');
+    const hasPw = existing.passwordHash ? '1' : '0';
+    redirect(`/signup?error=already_exists&providers=${providers}&hasPw=${hasPw}`);
+  }
 
   const passwordHash = await hash(parsed.data.password, 10);
   const [created] = await db
@@ -59,16 +66,31 @@ async function oauthSignupAction(formData: FormData) {
   await signIn(provider, { redirectTo: '/my/watches' });
 }
 
+const PROVIDER_LABEL: Record<string, string> = {
+  google: 'Google',
+  kakao: '카카오',
+  naver: '네이버',
+};
+
+function describeExisting(providers?: string, hasPw?: string): string {
+  const provs = (providers ?? '').split(',').filter(Boolean).map((p) => PROVIDER_LABEL[p] ?? p);
+  const parts: string[] = [];
+  if (hasPw === '1') parts.push('이메일 + 비밀번호');
+  if (provs.length > 0) parts.push(...provs);
+  if (parts.length === 0) return '이미 가입된 이메일입니다. 로그인 페이지에서 진행해주세요.';
+  return `이미 가입된 이메일입니다. 가입 방식: ${parts.join(' · ')}`;
+}
+
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; providers?: string; hasPw?: string }>;
 }) {
   const params = await searchParams;
   const err = params.error;
   const errMsg =
     err === 'already_exists'
-      ? '이미 가입된 이메일입니다'
+      ? describeExisting(params.providers, params.hasPw)
       : err
         ? decodeURIComponent(err)
         : null;
@@ -76,7 +98,14 @@ export default async function SignupPage({
   return (
     <div className="auth-card">
       <h1>회원가입</h1>
-      {errMsg && <p className="auth-error">{errMsg}</p>}
+      {errMsg && (
+        <div className="auth-info">
+          <strong>{errMsg}</strong>
+          {err === 'already_exists' && (
+            <p style={{ marginTop: 6 }}><Link href="/login">로그인 페이지로 →</Link></p>
+          )}
+        </div>
+      )}
       <form action={signupAction} className="cred-form">
         <label>
           이메일
