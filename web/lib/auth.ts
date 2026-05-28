@@ -6,6 +6,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { cookies } from 'next/headers';
 import { db } from './db';
 import { users, oauthAccounts, slotInventory } from './db/schema';
 
@@ -77,26 +78,55 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return true;
       }
 
-      let dbUser = await db.query.users.findFirst({ where: eq(users.email, email) });
-      if (!dbUser) {
-        const [created] = await db
-          .insert(users)
-          .values({
-            email,
-            displayName: user.name ?? null,
-            emailVerifiedAt: new Date(),
-          })
-          .returning();
-        dbUser = created;
-        await db.insert(slotInventory).values({ userId: dbUser.id });
+      const jar = await cookies();
+      const linkUserId = jar.get('link_oauth_user_id')?.value;
+      const allowSignup = jar.get('oauth_signup_allowed')?.value === '1';
+
+      // Case 1: 마이페이지에서 OAuth 추가 연동 (로그인 상태 유지)
+      if (linkUserId) {
+        await db.insert(oauthAccounts).values({
+          userId: linkUserId,
+          provider: account.provider,
+          providerAccountId: account.providerAccountId,
+        });
+        jar.delete('link_oauth_user_id');
+        user.id = linkUserId;
+        return true;
       }
 
+      // Case 2: 같은 email 의 기존 user 자동 link (편의)
+      const existingByEmail = await db.query.users.findFirst({ where: eq(users.email, email) });
+      if (existingByEmail) {
+        await db.insert(oauthAccounts).values({
+          userId: existingByEmail.id,
+          provider: account.provider,
+          providerAccountId: account.providerAccountId,
+        });
+        user.id = existingByEmail.id;
+        return true;
+      }
+
+      // Case 3: 신규. 가입 허용 cookie 있으면 가입, 없으면 거부 + 안내 페이지
+      if (!allowSignup) {
+        return `/login?error=signup_required&provider=${account.provider}`;
+      }
+
+      const [created] = await db
+        .insert(users)
+        .values({
+          email,
+          displayName: user.name ?? email.split('@')[0],
+          emailVerifiedAt: new Date(),
+        })
+        .returning();
+      await db.insert(slotInventory).values({ userId: created.id });
       await db.insert(oauthAccounts).values({
-        userId: dbUser.id,
+        userId: created.id,
         provider: account.provider,
         providerAccountId: account.providerAccountId,
       });
-      user.id = dbUser.id;
+      jar.delete('oauth_signup_allowed');
+      user.id = created.id;
       return true;
     },
     async jwt({ token, user }) {

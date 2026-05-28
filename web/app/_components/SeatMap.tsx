@@ -1,6 +1,7 @@
 import type { SeatSnapshot } from '@/lib/types/seat';
 
-export function SeatMap({ snapshot }: { snapshot: SeatSnapshot }) {
+export function SeatMap({ snapshot, registered = [] }: { snapshot: SeatSnapshot; registered?: string[] }) {
+  const regSet = new Set(registered);
   if (!snapshot.seats) return <p>좌석 데이터가 없습니다</p>;
 
   const byRow = new Map<string, typeof snapshot.seats>();
@@ -38,6 +39,7 @@ export function SeatMap({ snapshot }: { snapshot: SeatSnapshot }) {
                   data-watchable=""
                   data-watch-value={s.id}
                   data-watch-status={s.status}
+                  data-watch-registered={regSet.has(s.id) ? '1' : ''}
                 >
                   {s.col}
                 </button>

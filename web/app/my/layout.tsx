@@ -26,6 +26,7 @@ export default async function MyLayout({ children }: { children: ReactNode }) {
           <Link href="/my/watches">내 알림</Link>
           <Link href="/my/billing">슬롯 구매</Link>
           <Link href="/my/payments">결제 내역</Link>
+          <Link href="/my/profile">프로필 편집</Link>
         </nav>
       </aside>
       <section className="my-content">{children}</section>

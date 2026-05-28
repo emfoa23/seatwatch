@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
 import { SiteLogo } from '@/app/_components/Icons';
@@ -23,13 +24,16 @@ function describeSelector(sel: unknown): string {
     row?: string;
     values?: string[];
     adjacency?: number;
+    partySize?: number;
     mode?: 'seat' | 'time';
   };
   if (s.type === 'multi' && s.values) {
-    const label = s.mode === 'time' ? '시간' : '좌석';
-    const adj = (s.adjacency ?? 1) > 1 ? ` · ${s.adjacency}명 연속` : '';
+    const label = s.mode === 'time' ? '시간대' : '좌석';
+    const opt = s.mode === 'time'
+      ? ` · ${s.partySize ?? 1}명 예약`
+      : (s.adjacency ?? 1) > 1 ? ` · ${s.adjacency}명 연속` : '';
     const preview = s.values.slice(0, 3).join(', ') + (s.values.length > 3 ? ` 외 ${s.values.length - 3}` : '');
-    return `${label} ${preview}${adj}`;
+    return `${label} ${preview}${opt}`;
   }
   if (s.type === 'seat') return `좌석 ${s.id}`;
   if (s.type === 'time') return `시간 ${s.time}`;
@@ -44,7 +48,9 @@ export function WatchListItem({ item }: { item: Item }) {
   const [pending, startTransition] = useTransition();
   const [removed, setRemoved] = useState(false);
 
-  async function cancel() {
+  async function cancel(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
     if (!confirm('이 알림을 취소할까요?')) return;
     const res = await fetch('/api/watch', {
       method: 'DELETE',
@@ -61,17 +67,21 @@ export function WatchListItem({ item }: { item: Item }) {
 
   if (removed) return null;
 
+  const detailHref = `/${item.site}/${encodeURIComponent(item.externalEventId)}?watch=${item.id}`;
+
   return (
     <li className="watch-item">
-      <div className="watch-site">
-        <SiteLogo site={item.site} size={20} />
-        <span className="watch-site-label">{SITE_LABELS[item.site]}</span>
-      </div>
-      <div className="watch-body">
-        <span className="watch-event-id">{item.externalEventId}</span>
-        <span className="dim">{new Date(item.eventDatetime).toLocaleString('ko-KR')}</span>
-        <span className="dim small">{describeSelector(item.seatSelector)}</span>
-      </div>
+      <Link href={detailHref} className="watch-link">
+        <div className="watch-site">
+          <SiteLogo site={item.site} size={20} />
+          <span className="watch-site-label">{SITE_LABELS[item.site]}</span>
+        </div>
+        <div className="watch-body">
+          <span className="watch-event-id">{item.externalEventId}</span>
+          <span className="dim">{new Date(item.eventDatetime).toLocaleString('ko-KR')}</span>
+          <span className="dim small">{describeSelector(item.seatSelector)}</span>
+        </div>
+      </Link>
       <button type="button" className="btn btn-secondary btn-sm" onClick={cancel} disabled={pending}>
         {pending ? '취소중...' : '알림 취소'}
       </button>

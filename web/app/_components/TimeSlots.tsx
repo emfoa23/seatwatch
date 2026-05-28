@@ -1,6 +1,7 @@
 import type { SeatSnapshot } from '@/lib/types/seat';
 
-export function TimeSlots({ snapshot }: { snapshot: SeatSnapshot }) {
+export function TimeSlots({ snapshot, registered = [] }: { snapshot: SeatSnapshot; registered?: string[] }) {
+  const regSet = new Set(registered);
   if (!snapshot.timeSlots) return <p>시간대 데이터가 없습니다</p>;
   const total = snapshot.timeSlots.length;
   const available = snapshot.timeSlots.filter((s) => s.available).length;
@@ -22,6 +23,7 @@ export function TimeSlots({ snapshot }: { snapshot: SeatSnapshot }) {
             data-watchable=""
             data-watch-value={s.time}
             data-watch-status={s.available ? 'available' : 'occupied'}
+            data-watch-registered={regSet.has(s.time) ? '1' : ''}
           >
             <span className="time">{s.time}</span>
             <span className="party">{s.partySize[0]}-{s.partySize[1]}인</span>

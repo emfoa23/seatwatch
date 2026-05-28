@@ -12,11 +12,12 @@ interface Props {
 }
 
 const MAX_SEATS = 20;
-const MAX_ADJ = 10;
+const MAX_OPT = 10;
 
 export function WatchHandler({ site, externalEventId, eventDatetime, selectorMode, children }: Props) {
   const [selected, setSelected] = useState<string[]>([]);
   const [adjacency, setAdjacency] = useState(1);
+  const [partySize, setPartySize] = useState(2);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ kind: 'ok' | 'err' | 'info'; text: string } | null>(null);
 
@@ -59,17 +60,15 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
       return;
     }
     if (!confirm(
-      `${selected.length}개 ${selectorMode === 'seat' ? '좌석' : '시간'} 알림을 등록할까요?` +
-      (selectorMode === 'seat' && adjacency > 1 ? `\n조건: ${adjacency}명 연속 자리 발생 시 알림` : '')
+      `${selected.length}개 ${selectorMode === 'seat' ? '좌석' : '시간대'} 알림을 등록할까요?` +
+      (selectorMode === 'seat' && adjacency > 1 ? `\n조건: ${adjacency}명 연속 자리 발생 시 알림` : '') +
+      (selectorMode === 'time' ? `\n예약 인원: ${partySize}명` : '')
     )) return;
 
     setSubmitting(true);
-    const seatSelector = {
-      type: 'multi' as const,
-      values: selected,
-      adjacency: selectorMode === 'seat' ? adjacency : 1,
-      mode: selectorMode,
-    };
+    const seatSelector = selectorMode === 'seat'
+      ? { type: 'multi' as const, values: selected, mode: 'seat' as const, adjacency }
+      : { type: 'multi' as const, values: selected, mode: 'time' as const, partySize };
 
     const res = await fetch('/api/watch', {
       method: 'POST',
@@ -123,7 +122,7 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
           <strong>선택 {selected.length} / {MAX_SEATS}</strong>
           <span className="dim">{selected.length === 0 ? '마감된 자리를 클릭해서 선택하세요' : selected.join(', ')}</span>
         </div>
-        {selectorMode === 'seat' && (
+        {selectorMode === 'seat' ? (
           <label className="adj-input">
             <span>붙은 자리 수</span>
             <select
@@ -131,8 +130,21 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
               onChange={(e) => setAdjacency(Number(e.target.value))}
               onClick={(e) => e.stopPropagation()}
             >
-              {Array.from({ length: MAX_ADJ }, (_, i) => i + 1).map((n) => (
+              {Array.from({ length: MAX_OPT }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>{n}명 {n === 1 ? '(단일 자리)' : '연속'}</option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="adj-input">
+            <span>예약 인원</span>
+            <select
+              value={partySize}
+              onChange={(e) => setPartySize(Number(e.target.value))}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {Array.from({ length: MAX_OPT }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>{n}명</option>
               ))}
             </select>
           </label>

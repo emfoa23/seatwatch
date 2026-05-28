@@ -154,6 +154,38 @@ a:hover { text-decoration: underline; }
 .pay-failed { background: #fee2e2; color: #b91c1c; }
 .pay-refunded { background: #e0e7ff; color: #3730a3; }
 
+.profile-page h1 { margin: 0 0 16px; font-size: 22px; }
+.profile-section {
+  background: #fff; padding: 18px; border: 1px solid #e5e7eb; border-radius: 10px;
+  margin-bottom: 14px;
+}
+.profile-section h2 { margin: 0 0 6px; font-size: 15px; }
+.profile-section .small { margin: 0 0 12px; }
+.profile-form { display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+.profile-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #374151; }
+.profile-form input { padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+.profile-form .hint { color: #9ca3af; font-weight: normal; }
+.msg-ok { color: #166534; font-size: 12px; margin: 0; }
+.msg-err { color: #b91c1c; font-size: 12px; margin: 0; }
+
+.oauth-linked-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.oauth-linked-list li {
+  display: flex; align-items: center; justify-content: space-between; padding: 8px 12px;
+  background: #f9fafb; border-radius: 6px; font-size: 13px;
+}
+.oauth-link-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+
+.watch-banner {
+  background: #fef3c7; border: 1px solid #fbbf24; color: #92400e;
+  padding: 10px 14px; border-radius: 8px; margin-bottom: 14px;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px;
+}
+.watch-banner-tag {
+  background: #92400e; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px;
+}
+.watch-banner-desc { font-weight: 600; }
+.watch-banner-hint { color: #b45309; font-size: 12px; margin-left: auto; }
+
 .payment-result {
   max-width: 520px; margin: 60px auto; padding: 32px;
   background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; text-align: center;
@@ -201,6 +233,9 @@ a:hover { text-decoration: underline; }
 .cred-form input { padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
 .cred-form .hint { color: #9ca3af; font-weight: normal; }
 .auth-error { background: #fef2f2; color: #b91c1c; padding: 10px 12px; border-radius: 6px; font-size: 13px; }
+.auth-info { background: #fef3c7; color: #92400e; padding: 12px 14px; border-radius: 6px; font-size: 13px; }
+.auth-info strong { display: block; margin-bottom: 4px; }
+.auth-info p { margin: 0; }
 .auth-footer { text-align: center; margin-top: 18px; font-size: 13px; color: #6b7280; }
 
 .event-page { max-width: 1000px; margin: 0 auto; }
@@ -337,6 +372,12 @@ a:hover { text-decoration: underline; }
   background: #fff; padding: 14px; border-radius: 8px; border: 1px solid #e5e7eb;
   display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
 }
+.watch-link {
+  display: flex; gap: 14px; align-items: center; flex: 1; min-width: 0;
+  color: inherit; text-decoration: none;
+}
+.watch-link:hover { text-decoration: none; }
+.watch-link:hover .watch-event-id { text-decoration: underline; }
 .watch-site { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .watch-site-label { font-size: 12px; font-weight: 600; color: #374151; }
 .watch-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 200px; }

@@ -40,15 +40,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'confirm_failed', detail: result.error }, { status: 400 });
   }
 
-  await db
+  // pending → paid atomic transition. returning rows = [updated] 이면 첫 전환.
+  const transitioned = await db
     .update(payments)
     .set({ status: 'paid', tossPaymentKey: paymentKey, paidAt: new Date() })
-    .where(eq(payments.orderId, orderId));
+    .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')))
+    .returning({ slotsGranted: payments.slotsGranted });
+
+  if (transitioned.length === 0) {
+    // 다른 동시 요청이 이미 paid 로 전환. 슬롯 부여 skip (멱등).
+    return NextResponse.json({ ok: true, alreadyPaid: true });
+  }
 
   await db
     .update(slotInventory)
-    .set({ paidSlots: sql`${slotInventory.paidSlots} + ${pending.slotsGranted}` })
+    .set({ paidSlots: sql`${slotInventory.paidSlots} + ${transitioned[0].slotsGranted}` })
     .where(eq(slotInventory.userId, session.user.id));
 
-  return NextResponse.json({ ok: true, slotsGranted: pending.slotsGranted });
+  return NextResponse.json({ ok: true, slotsGranted: transitioned[0].slotsGranted });
 }

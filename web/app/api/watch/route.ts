@@ -13,8 +13,14 @@ const bodySchema = z.object({
     z.object({
       type: z.literal('multi'),
       values: z.array(z.string().min(1)).min(1).max(20),
+      mode: z.literal('seat'),
       adjacency: z.number().int().min(1).max(10).default(1),
-      mode: z.enum(['seat', 'time']),
+    }),
+    z.object({
+      type: z.literal('multi'),
+      values: z.array(z.string().min(1)).min(1).max(20),
+      mode: z.literal('time'),
+      partySize: z.number().int().min(1).max(10).default(1),
     }),
     z.object({
       type: z.enum(['seat', 'time', 'grade', 'row', 'any']),

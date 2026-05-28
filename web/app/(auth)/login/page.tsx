@@ -5,10 +5,11 @@ import { GoogleIcon, KakaoIcon, NaverIcon } from '@/app/_components/Icons';
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; callbackUrl?: string }>;
+  searchParams: Promise<{ error?: string; callbackUrl?: string; provider?: string }>;
 }) {
   const params = await searchParams;
   const callbackUrl = params.callbackUrl ?? '/my/watches';
+  const signupRequired = params.error === 'signup_required';
 
   async function oauthGoogle() {
     'use server';
@@ -34,7 +35,15 @@ export default async function LoginPage({
   return (
     <div className="auth-card">
       <h1>로그인</h1>
-      {params.error && <p className="auth-error">로그인 실패: {params.error}</p>}
+      {signupRequired ? (
+        <div className="auth-info">
+          <strong>등록되지 않은 {params.provider ?? 'OAuth'} 계정입니다.</strong>
+          <p>아직 가입하지 않으셨다면 회원가입 페이지에서 진행해주세요.</p>
+          <Link href="/signup" className="btn btn-primary btn-sm" style={{ marginTop: 8 }}>회원가입으로 이동</Link>
+        </div>
+      ) : params.error ? (
+        <p className="auth-error">로그인 실패: {params.error}</p>
+      ) : null}
 
       <div className="oauth-buttons">
         <form action={oauthGoogle}>
