@@ -5,15 +5,15 @@ import { WatchHandler } from '@/app/_components/WatchHandler';
 
 export const dynamic = 'force-dynamic';
 
-export default async function CgvPage({ params }: { params: Promise<{ movieId: string }> }) {
+export default async function MegaboxDetail({ params }: { params: Promise<{ movieId: string }> }) {
   const { movieId } = await params;
   const decoded = decodeURIComponent(movieId);
-  const { snapshot, source } = await getSnapshot('cgv', decoded);
+  const { snapshot, source } = await getSnapshot('megabox', decoded);
   return (
     <div className="event-page">
       <EventHeader snapshot={snapshot} source={source} />
       <WatchHandler
-        site="cgv"
+        site="megabox"
         externalEventId={decoded}
         eventDatetime={snapshot.eventDatetime}
         selectorMode="seat"

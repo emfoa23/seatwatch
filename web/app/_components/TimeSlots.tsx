@@ -18,7 +18,10 @@ export function TimeSlots({ snapshot }: { snapshot: SeatSnapshot }) {
             key={s.time}
             type="button"
             className={`timeslot timeslot-${s.available ? 'available' : 'occupied'}`}
-            title={`${s.time} · ${s.partySize[0]}-${s.partySize[1]}인 · ${s.available ? '예약가능' : '마감'}`}
+            title={`${s.time} · ${s.partySize[0]}-${s.partySize[1]}인 · ${s.available ? '예약가능' : '마감 (클릭 → 알림 등록)'}`}
+            data-watchable=""
+            data-watch-value={s.time}
+            data-watch-status={s.available ? 'available' : 'occupied'}
           >
             <span className="time">{s.time}</span>
             <span className="party">{s.partySize[0]}-{s.partySize[1]}인</span>

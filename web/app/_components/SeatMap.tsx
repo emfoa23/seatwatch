@@ -32,9 +32,11 @@ export function SeatMap({ snapshot }: { snapshot: SeatSnapshot }) {
                   type="button"
                   className={`seat seat-${s.status} grade-${s.grade.toLowerCase()}`}
                   title={`${s.id} · ${s.grade} · ${s.price.toLocaleString()}원 · ${
-                    s.status === 'available' ? '예매가능' : '마감'
+                    s.status === 'available' ? '예매가능' : '마감 (클릭 → 알림 등록)'
                   }`}
-                  data-seat-id={s.id}
+                  data-watchable=""
+                  data-watch-value={s.id}
+                  data-watch-status={s.status}
                 >
                   {s.col}
                 </button>

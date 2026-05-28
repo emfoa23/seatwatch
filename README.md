@@ -7,8 +7,8 @@ CGV·인터파크 티켓·캐치테이블의 좌석/시간대 예약 현황을 �
 ## 구성
 
 - `web/` — Next.js (App Router). Vercel 배포.
+- `web/scripts/seed-mock.ts` — Mock 데이터 5사 적재 (`npm run seed`).
 - `worker/` — Node.js 알림 큐 consumer. Render Background Worker.
-- `shared/` — web/worker 가 공유하는 타입.
 - `.github/workflows/` — CI + 신선도 모니터링.
 
 크롤러는 별도 repo: [emfoa23/seatwatch-crawler](https://github.com/emfoa23/seatwatch-crawler) (public, GitHub Actions 무제한 사용).
@@ -99,12 +99,16 @@ npm run dev              # http://localhost:3000
 - [x] Repo 셋업 + skeleton
 - [x] Neon DB 스키마 (9 테이블, 22 인덱스)
 - [x] Auth.js v5: Google · Kakao · Naver OAuth + Credentials
-- [x] 좌석 조회 페이지 (CGV · Interpark · CatchTable) — Valkey snapshot SSR
+- [x] 헤더 로그인/로그아웃 토글, 홈 placeholder
+- [x] 5사 검색 인덱스 (CGV · 메가박스 · 롯데시네마 · 인터파크 · 캐치테이블)
+- [x] 5사 상세 페이지 (좌석맵/시간슬롯, Valkey snapshot SSR)
+- [x] Mock seed 스크립트 (210 events: 60+60+60+15+15)
+- [x] 좌석/시간 클릭 → 알림 등록 UX (비로그인 시 /login redirect, 슬롯 검증)
+- [x] POST/DELETE /api/watch (zod 검증, 슬롯 부족 시 409)
+- [x] 알림 워커 + Resend 발송 (cooldown SETNX, dedupe DB UNIQUE)
 - [x] CGV crawler MVP (mock fallback)
-- [ ] watch 등록/취소 + 슬롯 카운팅
 - [ ] 토스페이먼츠 결제 (테스트 키 발급 후)
-- [ ] Render Worker + Resend 알림
-- [ ] 인터파크 (Playwright) · 캐치테이블 crawler
+- [ ] 인터파크 (Playwright) · 캐치테이블 crawler 실제 endpoint
 - [ ] monitor-freshness workflow 실 구현
 - [ ] Vercel · Render 배포
 

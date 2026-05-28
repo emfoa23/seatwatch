@@ -1,4 +1,4 @@
-import type { Seat, SeatSnapshot, TimeSlot } from './types/seat';
+import type { Seat, SeatSnapshot, TimeSlot, Site } from './types/seat';
 
 function mockSeats(rows: number, cols: number): Seat[] {
   const out: Seat[] = [];
@@ -35,36 +35,36 @@ function mockTimeSlots(): TimeSlot[] {
   return slots;
 }
 
-export function mockSnapshot(site: 'cgv' | 'interpark' | 'catchtable', eventId: string): SeatSnapshot {
+export function mockSnapshot(site: Site, eventId: string): SeatSnapshot {
   const base = {
     externalEventId: eventId,
     eventDatetime: '2026-06-15T19:30:00+09:00',
     capturedAt: new Date().toISOString(),
   };
-  if (site === 'cgv') {
+  if (site === 'catchtable') {
     return {
       ...base,
       site,
-      title: '듄: 파트3 (Mock)',
-      venue: 'CGV 용산아이파크몰 4DX 1관',
-      seats: mockSeats(8, 12),
+      title: `식당 ${eventId} (Mock)`,
+      venue: '서울 강남구',
+      eventDatetime: '2026-06-15T00:00:00+09:00',
+      timeSlots: mockTimeSlots(),
     };
   }
   if (site === 'interpark') {
     return {
       ...base,
       site,
-      title: '오페라의 유령 (Mock)',
-      venue: '예술의전당 오페라극장',
+      title: `공연 ${eventId} (Mock)`,
+      venue: '예술의전당',
       seats: mockSeats(10, 14),
     };
   }
   return {
     ...base,
     site,
-    title: '정식당 (Mock)',
-    venue: '서울 강남구 도산대로',
-    eventDatetime: '2026-06-15T00:00:00+09:00',
-    timeSlots: mockTimeSlots(),
+    title: `영화 ${eventId} (Mock)`,
+    venue: `${site.toUpperCase()} 극장`,
+    seats: mockSeats(8, 12),
   };
 }

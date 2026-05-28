@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "seed": "tsx --env-file=.env.local scripts/seed-mock.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
@@ -22,6 +23,7 @@
     "next-auth": "5.0.0-beta.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "tsx": "^4.22.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
