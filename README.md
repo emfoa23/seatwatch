@@ -53,6 +53,61 @@ CGV·인터파크 티켓·캐치테이블의 좌석/시간대 예약 현황을 �
 
 이 서비스는 외부 사이트(CGV·인터파크·캐치테이블)의 공개 정보를 정기 조회. 각 사이트 ToS 가 "자동화된 수단 접근 금지" 일반 조항을 포함하고 있어 **IP 차단·계정 차단·법적 분쟁** 위험이 있음. 운영 시 모니터링·SLA 운영 메모 별도.
 
+## 로컬 개발
+
+### 사전 준비
+
+1. `.env.local` 을 repo root 에 두고 키를 채움 (`.env.example` 참고).
+2. `web/.env.local` 은 root 의 symlink (`ln -s ../.env.local web/.env.local`).
+
+### 실행
+
+```bash
+cd web
+npm install
+npm run db:push          # Neon 에 스키마 적용 (최초 1회)
+npm run dev              # http://localhost:3000
+```
+
+주요 페이지:
+- `/` — 홈
+- `/cgv/<id>` · `/interpark/<id>` · `/catchtable/<id>` — 좌석 조회 (Valkey snapshot, 없으면 mock fallback)
+- `/login` · `/signup` — 인증 (Google · Kakao · Naver OAuth + 자체 가입)
+- `/my/watches` — 내 알림 (로그인 필요)
+
+스크립트:
+- `npm run db:push` — drizzle 마이그레이션 push
+- `npm run db:studio` — drizzle studio
+- `npm run typecheck` — TS 검증
+
+### 데이터 흐름
+
+```
+[crawler]  →  Valkey snapshot:<site>:<id>:<dt>  →  [web SSR]  →  브라우저
+                    ↓
+              Neon seat_events + crawl_jobs
+                    ↓
+         빈자리 발생 시 Valkey notify:queue
+                    ↓
+              [Render Worker] (다음 PR)
+                    ↓
+                  Resend
+```
+
+## 구현 진척 (2026-05-28)
+
+- [x] Repo 셋업 + skeleton
+- [x] Neon DB 스키마 (9 테이블, 22 인덱스)
+- [x] Auth.js v5: Google · Kakao · Naver OAuth + Credentials
+- [x] 좌석 조회 페이지 (CGV · Interpark · CatchTable) — Valkey snapshot SSR
+- [x] CGV crawler MVP (mock fallback)
+- [ ] watch 등록/취소 + 슬롯 카운팅
+- [ ] 토스페이먼츠 결제 (테스트 키 발급 후)
+- [ ] Render Worker + Resend 알림
+- [ ] 인터파크 (Playwright) · 캐치테이블 crawler
+- [ ] monitor-freshness workflow 실 구현
+- [ ] Vercel · Render 배포
+
 ## 개발 룰
 
 - Personal/CLAUDE.md 따름 (브랜치 최신화, README 갱신, merge commit, 모듈화).
