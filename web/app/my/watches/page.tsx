@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { eq, and, desc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { watchTargets, slotInventory } from '@/lib/db/schema';
+import { watchTargets, slotInventory, eventsMeta } from '@/lib/db/schema';
 import { groupKeyForEvent, encodeGroupKey } from '@/lib/events';
 import type { Site } from '@/lib/types/seat';
 import { WatchListItem } from './WatchListItem';
@@ -24,15 +24,25 @@ export default async function WatchesPage() {
 
   const items = await Promise.all(
     active.map(async (w) => {
-      const groupKey = await groupKeyForEvent(w.site as Site, w.externalEventId);
+      const [groupKey, meta] = await Promise.all([
+        groupKeyForEvent(w.site as Site, w.externalEventId),
+        db.query.eventsMeta.findFirst({
+          where: and(
+            eq(eventsMeta.site, w.site),
+            eq(eventsMeta.externalEventId, w.externalEventId),
+            eq(eventsMeta.eventDatetime, w.eventDatetime),
+          ),
+        }),
+      ]);
       const eventDt = w.eventDatetime.toISOString();
       const href = groupKey
         ? `/${w.site}/g/${encodeGroupKey(groupKey)}?dt=${encodeURIComponent(eventDt)}&watch=${w.id}`
-        : `/${w.site}?q=${encodeURIComponent(w.externalEventId)}`;
+        : `/${w.site}`;
       return {
         id: w.id,
         site: w.site as Site,
-        externalEventId: w.externalEventId,
+        title: meta?.title ?? '(데이터 만료)',
+        venue: meta?.venue ?? '',
         eventDatetime: eventDt,
         seatSelector: w.seatSelector,
         detailHref: href,

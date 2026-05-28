@@ -1,4 +1,9 @@
+import { createHash } from 'node:crypto';
 import type { Seat, SeatSnapshot, Site, EventIndexEntry, TimeSlot } from './types/seat';
+
+function hashId(parts: (string | number)[]): string {
+  return createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 16);
+}
 
 const MOVIES = [
   '듄: 파트3',
@@ -107,7 +112,7 @@ function generateMovieSiteEvents(site: Site, theaters: typeof CGV_THEATERS): Mov
       for (const time of TIMES_MOVIE.slice(0, 3)) {
         const day = FUTURE_DAYS[seed % FUTURE_DAYS.length];
         const dt = futureDate(day, time);
-        const id = `${theater.code}_${movie.replace(/[^A-Za-z0-9가-힣]/g, '')}_${day}_${time.replace(':', '')}`;
+        const id = hashId([site, theater.code, movie, day, time]);
         const seats = generateSeats(8, 12, seed);
         out.push({
           entry: {
@@ -142,7 +147,7 @@ function generateInterparkEvents(): MovieEvent[] {
   for (const show of SHOWS) {
     for (const day of FUTURE_DAYS.slice(0, 3)) {
       const dt = futureDate(day, '19:30');
-      const id = `${show.category}_${show.title.replace(/\s/g, '')}_${day}`;
+      const id = hashId(['interpark', show.category, show.title, day]);
       const seats = generateSeats(10, 14, seed);
       out.push({
         entry: {
@@ -175,7 +180,7 @@ function generateCatchtableEvents(): MovieEvent[] {
   for (const r of RESTAURANTS) {
     for (const day of FUTURE_DAYS.slice(0, 3)) {
       const dt = futureDate(day, '00:00');
-      const id = `${r.category}_${r.name.replace(/\s/g, '')}_${day}`;
+      const id = hashId(['catchtable', r.category, r.name, day]);
       out.push({
         entry: {
           site: 'catchtable',

@@ -9,7 +9,8 @@ import { SiteLogo } from '@/app/_components/Icons';
 interface Item {
   id: string;
   site: Site;
-  externalEventId: string;
+  title: string;
+  venue: string;
   eventDatetime: string;
   seatSelector: unknown;
   detailHref: string;
@@ -76,7 +77,8 @@ export function WatchListItem({ item }: { item: Item }) {
           <span className="watch-site-label">{SITE_LABELS[item.site]}</span>
         </div>
         <div className="watch-body">
-          <span className="watch-event-id">{item.externalEventId}</span>
+          <span className="watch-title">{item.title}</span>
+          {item.venue && <span className="dim small">{item.venue}</span>}
           <span className="dim">{new Date(item.eventDatetime).toLocaleString('ko-KR')}</span>
           <span className="dim small">{describeSelector(item.seatSelector)}</span>
         </div>

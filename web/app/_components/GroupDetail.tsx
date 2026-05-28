@@ -11,7 +11,10 @@ import { WatchHandler } from './WatchHandler';
 import { WatchBannerList } from './WatchBannerList';
 
 function dayKey(iso: string): string {
-  return iso.slice(0, 10);
+  // ISO 의 tz offset 와 무관하게 한국시간(UTC+9) 기준 날짜
+  const d = new Date(iso);
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
 }
 
 function fmtDayLabel(iso: string): string {

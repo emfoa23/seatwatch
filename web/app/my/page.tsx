@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { eq, and, desc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { slotInventory, watchTargets, payments } from '@/lib/db/schema';
+import { slotInventory, watchTargets, payments, eventsMeta } from '@/lib/db/schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +26,19 @@ export default async function MyHome() {
       limit: 3,
     }),
   ]);
+
+  const recentWatchTitles = await Promise.all(
+    recentWatches.map(async (w) => {
+      const meta = await db.query.eventsMeta.findFirst({
+        where: and(
+          eq(eventsMeta.site, w.site),
+          eq(eventsMeta.externalEventId, w.externalEventId),
+          eq(eventsMeta.eventDatetime, w.eventDatetime),
+        ),
+      });
+      return { ...w, title: meta?.title ?? '(데이터 만료)', venue: meta?.venue ?? '' };
+    })
+  );
 
   const total = (inv?.freeSlots ?? 0) + (inv?.paidSlots ?? 0);
   const used = activeCount.length;
@@ -60,10 +73,10 @@ export default async function MyHome() {
           <p className="empty small">아직 등록된 알림이 없습니다.</p>
         ) : (
           <ul className="dash-list">
-            {recentWatches.map((w) => (
+            {recentWatchTitles.map((w) => (
               <li key={w.id}>
                 <span className={`badge badge-${w.site}`}>{w.site.toUpperCase()}</span>
-                <span>{w.externalEventId}</span>
+                <span>{w.title}{w.venue ? ` · ${w.venue}` : ''}</span>
                 <span className="dim">{new Date(w.eventDatetime).toLocaleString('ko-KR')}</span>
               </li>
             ))}

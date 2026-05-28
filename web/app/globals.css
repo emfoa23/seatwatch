@@ -20,7 +20,7 @@ a:hover { text-decoration: underline; }
 .brand { font-weight: 800; font-size: 18px; color: #111; flex-shrink: 0; }
 .brand:hover { text-decoration: none; }
 .site-nav { display: flex; gap: 4px; font-size: 13px; align-items: center; }
-.site-nav-desktop { flex: 1; }
+.site-nav-desktop { flex: 1; flex-wrap: nowrap; overflow-x: auto; }
 .nav-link {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px;
   color: #374151; white-space: nowrap; word-break: keep-all;
@@ -47,7 +47,7 @@ a:hover { text-decoration: underline; }
 .site-nav-drawer .nav-link { padding: 10px 12px; }
 .drawer-divider { border: none; border-top: 1px solid #f3f4f6; margin: 6px 0; }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .site-nav-desktop { display: none; }
   .hamburger { display: flex; }
   .site-nav-drawer { display: flex; }
@@ -423,6 +423,7 @@ a:hover { text-decoration: underline; }
 .watch-site-label { font-size: 12px; font-weight: 600; color: #374151; }
 .watch-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 200px; }
 .watch-event-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #111; }
+.watch-title { font-size: 14px; font-weight: 700; color: #111; }
 .watch-body .dim { color: #6b7280; font-size: 12px; }
 .watch-body .small { font-size: 11px; }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
