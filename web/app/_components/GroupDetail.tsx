@@ -3,10 +3,12 @@ import { notFound } from 'next/navigation';
 import { getGroup, encodeGroupKey } from '@/lib/events';
 import { getSnapshot } from '@/lib/snapshot';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
+import { loadAllWatchContexts, resolveHighlight } from '@/lib/watch-context';
 import { SiteLogo } from './Icons';
 import { SeatMap } from './SeatMap';
 import { TimeSlots } from './TimeSlots';
 import { WatchHandler } from './WatchHandler';
+import { WatchBannerList } from './WatchBannerList';
 
 function dayKey(iso: string): string {
   return iso.slice(0, 10);
@@ -28,10 +30,12 @@ export async function GroupDetail({
   site,
   groupKey,
   dt,
+  watch,
 }: {
   site: Site;
   groupKey: string;
   dt?: string;
+  watch?: string;
 }) {
   const group = await getGroup(site, groupKey);
   if (!group) notFound();
@@ -44,6 +48,9 @@ export async function GroupDetail({
 
   const { snapshot, source } = await getSnapshot(site, selectedEntry.externalEventId);
   const isRestaurant = site === 'catchtable';
+
+  const contexts = await loadAllWatchContexts(site, selectedEntry.externalEventId);
+  const highlighted = resolveHighlight(contexts, watch);
 
   return (
     <div className="group-detail">
@@ -89,28 +96,31 @@ export async function GroupDetail({
           })}
         </div>
 
-        <h2 className="picker-label">시간</h2>
-        <div className="time-picker">
-          {timesOnDay.map((e) => (
-            <Link
-              key={e.externalEventId}
-              href={`/${site}/g/${encodeGroupKey(groupKey)}?dt=${encodeURIComponent(e.eventDatetime)}`}
-              className={`time-chip ${e.externalEventId === selectedEntry.externalEventId ? 'active' : ''}`}
-              replace
-            >
-              {fmtTime(e.eventDatetime)}
-            </Link>
-          ))}
-        </div>
+        {!isRestaurant && (
+          <>
+            <h2 className="picker-label">시간</h2>
+            <div className="time-picker">
+              {timesOnDay.map((e) => (
+                <Link
+                  key={e.externalEventId}
+                  href={`/${site}/g/${encodeGroupKey(groupKey)}?dt=${encodeURIComponent(e.eventDatetime)}`}
+                  className={`time-chip ${e.externalEventId === selectedEntry.externalEventId ? 'active' : ''}`}
+                  replace
+                >
+                  {fmtTime(e.eventDatetime)}
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       <section className="snapshot-meta">
         <span className={`source source-${source}`}>{source === 'valkey' ? '실시간' : 'MOCK'}</span>
         <span className="captured">최근 갱신: {new Date(snapshot.capturedAt).toLocaleString('ko-KR')}</span>
-        <Link href={`/${site}/${encodeURIComponent(selectedEntry.externalEventId)}`} className="open-detail">
-          단일 회차 전체보기 ↗
-        </Link>
       </section>
+
+      <WatchBannerList contexts={contexts} />
 
       <WatchHandler
         site={site}
@@ -118,7 +128,9 @@ export async function GroupDetail({
         eventDatetime={snapshot.eventDatetime}
         selectorMode={isRestaurant ? 'time' : 'seat'}
       >
-        {isRestaurant ? <TimeSlots snapshot={snapshot} /> : <SeatMap snapshot={snapshot} />}
+        {isRestaurant
+          ? <TimeSlots snapshot={snapshot} registered={highlighted} />
+          : <SeatMap snapshot={snapshot} registered={highlighted} />}
       </WatchHandler>
     </div>
   );

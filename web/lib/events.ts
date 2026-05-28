@@ -86,11 +86,17 @@ export interface EventGroup {
   entries: EventIndexEntry[];
 }
 
-function groupKeyOf(entry: EventIndexEntry): string {
+export function groupKeyOf(entry: EventIndexEntry): string {
   if (entry.site === 'cgv' || entry.site === 'megabox' || entry.site === 'lotte') {
     return `${entry.venue}__${entry.title}`;
   }
   return entry.title;
+}
+
+export async function groupKeyForEvent(site: Site, externalEventId: string): Promise<string | null> {
+  const entry = await getEventIndexEntry(site, externalEventId);
+  if (!entry) return null;
+  return groupKeyOf(entry);
 }
 
 export function encodeGroupKey(key: string): string {

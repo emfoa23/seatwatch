@@ -3,6 +3,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { watchTargets, slotInventory } from '@/lib/db/schema';
+import { groupKeyForEvent, encodeGroupKey } from '@/lib/events';
 import type { Site } from '@/lib/types/seat';
 import { WatchListItem } from './WatchListItem';
 
@@ -21,6 +22,24 @@ export default async function WatchesPage() {
 
   const totalSlots = (inventory?.freeSlots ?? 0) + (inventory?.paidSlots ?? 0);
 
+  const items = await Promise.all(
+    active.map(async (w) => {
+      const groupKey = await groupKeyForEvent(w.site as Site, w.externalEventId);
+      const eventDt = w.eventDatetime.toISOString();
+      const href = groupKey
+        ? `/${w.site}/g/${encodeGroupKey(groupKey)}?dt=${encodeURIComponent(eventDt)}&watch=${w.id}`
+        : `/${w.site}?q=${encodeURIComponent(w.externalEventId)}`;
+      return {
+        id: w.id,
+        site: w.site as Site,
+        externalEventId: w.externalEventId,
+        eventDatetime: eventDt,
+        seatSelector: w.seatSelector,
+        detailHref: href,
+      };
+    })
+  );
+
   return (
     <div className="my-watches">
       <h1>내 알림</h1>
@@ -30,24 +49,15 @@ export default async function WatchesPage() {
         <Link href="/my/billing" className="btn btn-primary">슬롯 추가</Link>
       </div>
 
-      {active.length === 0 ? (
+      {items.length === 0 ? (
         <div className="empty">
           <p>아직 등록된 알림이 없습니다.</p>
           <p>좌석 페이지에서 마감된 자리를 골라 알림을 등록하세요.</p>
         </div>
       ) : (
         <ul className="watch-list">
-          {active.map((w) => (
-            <WatchListItem
-              key={w.id}
-              item={{
-                id: w.id,
-                site: w.site as Site,
-                externalEventId: w.externalEventId,
-                eventDatetime: w.eventDatetime.toISOString(),
-                seatSelector: w.seatSelector,
-              }}
-            />
+          {items.map((it) => (
+            <WatchListItem key={it.id} item={it} />
           ))}
         </ul>
       )}

@@ -34,16 +34,32 @@ const redis = new Redis(VALKEY_URL, {
 const QUEUE = 'notify:queue';
 const COOLDOWN_SEC = 30 * 60;
 
+async function buildDetailUrl(p: NotifyPayload): Promise<string> {
+  const raw = await redis.hget(`events:${p.site}`, p.event_id);
+  const base = process.env.PUBLIC_SITE_URL ?? 'https://seatwatch.vercel.app';
+  if (!raw) return `${base}/${p.site}`;
+  try {
+    const entry = JSON.parse(raw) as { title: string; venue: string };
+    const movieSites = ['cgv', 'megabox', 'lotte'];
+    const key = movieSites.includes(p.site) ? `${entry.venue}__${entry.title}` : entry.title;
+    const encoded = Buffer.from(key, 'utf-8').toString('base64url');
+    return `${base}/${p.site}/g/${encoded}?dt=${encodeURIComponent(p.event_datetime)}`;
+  } catch {
+    return `${base}/${p.site}`;
+  }
+}
+
 async function sendMail(p: NotifyPayload): Promise<{ ok: boolean; status: number; body: string }> {
   const subject = `[seatwatch] ${p.site.toUpperCase()} ${p.event_id} — 빈자리 발견`;
   const seatStr = JSON.stringify(p.seat);
+  const detailUrl = await buildDetailUrl(p);
   const html = `
     <h2>찾던 자리에 빈자리가 생겼습니다</h2>
     <p>사이트: <b>${p.site.toUpperCase()}</b></p>
     <p>이벤트 ID: <code>${p.event_id}</code></p>
     <p>일시: ${new Date(p.event_datetime).toLocaleString('ko-KR')}</p>
     <p>좌석: <code>${seatStr}</code></p>
-    <p><a href="https://seatwatch.vercel.app/${p.site}/${encodeURIComponent(p.event_id)}">바로 확인</a></p>
+    <p><a href="${detailUrl}">바로 확인</a></p>
     <hr>
     <p style="color:#999;font-size:12px">자동 알림 메일입니다. 알림을 끄려면 /my/watches 에서 해당 항목을 취소하세요.</p>
   `;

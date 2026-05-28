@@ -12,6 +12,7 @@ interface Item {
   externalEventId: string;
   eventDatetime: string;
   seatSelector: unknown;
+  detailHref: string;
 }
 
 function describeSelector(sel: unknown): string {
@@ -67,11 +68,9 @@ export function WatchListItem({ item }: { item: Item }) {
 
   if (removed) return null;
 
-  const detailHref = `/${item.site}/${encodeURIComponent(item.externalEventId)}?watch=${item.id}`;
-
   return (
     <li className="watch-item">
-      <Link href={detailHref} className="watch-link">
+      <Link href={item.detailHref} className="watch-link">
         <div className="watch-site">
           <SiteLogo site={item.site} size={20} />
           <span className="watch-site-label">{SITE_LABELS[item.site]}</span>
