@@ -44,43 +44,38 @@ function todayKstIso() {
   return `${ymd}T18:00:00+09:00`;
 }
 
-/** CatchTable 응답 → EventIndexEntry[] */
+/** CatchTable 응답 → EventIndexEntry[]
+ *  실제 구조: data.shopResults.shops[].shopMeta.{shopRef, shopName, urlPathAlias, ...}
+ *            + shops[].shopAddress (or shops[].addressLevel1) 등 동봉.
+ */
 function parseToEntries(json) {
-  // 응답 구조 추정 (실제로 보고 정밀화 필요):
-  // { data: { shops: [{ shopId, shopName, addressLevel1, addressLevel2, ... }] } }
-  // 혹은 { data: { divisions: [{ shops: [...] }] } }
   const out = [];
   const dt = todayKstIso();
-  function visit(o) {
-    if (!o) return;
-    if (Array.isArray(o)) {
-      for (const x of o) visit(x);
-      return;
-    }
-    if (typeof o !== 'object') return;
-    // shop 객체 인식
-    if ((o.shopId || o.id) && (o.shopName || o.name || o.title)) {
-      const id = String(o.shopId || o.id);
-      const title = String(o.shopName || o.name || o.title);
-      const region =
-        o.addressLevel1 ||
-        o.region ||
-        (o.address && o.address.level1) ||
-        '';
-      const venue = o.addressLevel2 || o.subRegion || (o.address && o.address.level2) || region || '';
-      out.push({
-        site: 'catchtable',
-        externalEventId: eidOf(id, title),
-        eventDatetime: dt,
-        title,
-        venue,
-        region,
-      });
-      return;
-    }
-    for (const k of Object.keys(o)) visit(o[k]);
+  const shops = json?.data?.shopResults?.shops || [];
+  for (const s of Array.isArray(shops) ? shops : []) {
+    const meta = s.shopMeta || s;
+    const shopRef = meta.shopRef || meta.shopId || meta.urlPathAlias || meta.id;
+    const title = meta.shopName || meta.name || meta.title;
+    if (!shopRef || !title) continue;
+    const addr = s.shopAddress || s.address || {};
+    const region =
+      addr.addressLevel1 || addr.level1 || meta.addressLevel1 || s.regionName || '';
+    const venue =
+      addr.addressLevel2 ||
+      addr.level2 ||
+      meta.addressLevel2 ||
+      s.subRegion ||
+      region ||
+      '';
+    out.push({
+      site: 'catchtable',
+      externalEventId: eidOf(shopRef, title),
+      eventDatetime: dt,
+      title,
+      venue: venue || '캐치테이블',
+      region: region || undefined,
+    });
   }
-  visit(json);
   // 중복 제거
   const seen = new Set();
   const dedup = [];
