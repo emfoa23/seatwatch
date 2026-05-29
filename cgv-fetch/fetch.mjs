@@ -58,27 +58,68 @@ function parseToEntries(json, query) {
 }
 
 async function searchOne(page, query) {
-  // 검색 페이지로 navigate — CGV SPA 가 자체 fetch 로 endpoint 자동 호출.
-  // 그 응답을 page.waitForResponse 로 캡쳐.
-  const searchUrl = `https://cgv.co.kr/search/?searchKeyword=${encodeURIComponent(query)}`;
-  console.log(`  goto ${searchUrl}`);
-  const respPromise = page.waitForResponse(
-    (r) => r.url().includes('/tme/more/itgrSrch/searchItgrSrchMov'),
-    { timeout: 15_000 },
-  ).catch((e) => ({ _error: String(e) }));
+  // Strategy: 메인 페이지의 검색 input 에 키워드 입력 후 Enter
+  //   → CGV SPA 가 자체 검색 fire → fetch interceptor 가 signature inject
+  //   → waitForResponse 로 itgrSrch endpoint 응답 캡쳐
+  const respPromise = page
+    .waitForResponse(
+      (r) => r.url().includes('/tme/more/itgrSrch/searchItgrSrchMov'),
+      { timeout: 20_000 },
+    )
+    .catch((e) => ({ _error: String(e) }));
 
-  await page.goto(searchUrl, { waitUntil: 'networkidle', timeout: 30_000 });
-  console.log(`  after search goto: url=${page.url()} title=${(await page.title().catch(() => '?')).slice(0, 80)}`);
-  await page.screenshot({ path: `search-${Date.now()}.png` }).catch(() => null);
+  // 일반적인 검색 input 셀렉터 후보들 (CGV SPA 변경에 robust 하게)
+  const candidates = [
+    'input[type="search"]',
+    'input[placeholder*="검색"]',
+    'input[name*="search" i]',
+    'input[name*="keyword" i]',
+    '[role="search"] input',
+    'header input',
+  ];
+
+  let filled = false;
+  for (const sel of candidates) {
+    try {
+      const el = await page.waitForSelector(sel, { timeout: 3_000, state: 'visible' });
+      if (el) {
+        await el.click({ clickCount: 3 }).catch(() => null);
+        await el.fill(query);
+        await page.keyboard.press('Enter');
+        console.log(`  filled via selector: ${sel}`);
+        filled = true;
+        break;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  if (!filled) {
+    console.log('  no search input found — fallback to direct page.evaluate fetch');
+    // page context 안 fetch — CGV 의 fetch interceptor 가 page-wide 라면 작동
+    const url = `${TARGET_URL_BASE}?coCd=${COCD}&swrd=${encodeURIComponent(query)}&lmtSrchYn=N`;
+    const result = await page.evaluate(async (u) => {
+      try {
+        const r = await fetch(u, { headers: { accept: 'application/json' }, credentials: 'include' });
+        const text = await r.text();
+        let body;
+        try { body = JSON.parse(text); } catch { body = { rawText: text.slice(0, 800) }; }
+        return { ok: r.ok, status: r.status, body };
+      } catch (e) {
+        return { ok: false, status: 0, error: String(e) };
+      }
+    }, url);
+    return result;
+  }
 
   const resp = await respPromise;
-  if (resp && resp._error) {
-    return { ok: false, status: 0, error: resp._error };
-  }
+  await page.screenshot({ path: `search-${Date.now()}.png` }).catch(() => null);
+  if (resp && resp._error) return { ok: false, status: 0, error: resp._error };
   if (!resp) return { ok: false, status: 0, error: 'no response captured' };
   try {
     const status = resp.status();
-    const body = status === 200 ? await resp.json() : { rawText: (await resp.text()).slice(0, 800) };
+    const body =
+      status === 200 ? await resp.json() : { rawText: (await resp.text()).slice(0, 800) };
     return { ok: status === 200, status, body };
   } catch (e) {
     return { ok: false, status: 0, error: String(e) };
