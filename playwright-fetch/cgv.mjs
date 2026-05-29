@@ -170,6 +170,12 @@ async function main() {
     }
     const entries = parseToEntries(r.body, q);
     console.log(`  parsed entries=${entries.length}`);
+    if (entries.length === 0) {
+      // 구조 분석을 위해 atktPsblMovInfo 살펴보기
+      const info = r.body?.data?.atktPsblMovInfo;
+      console.log(`  atktPsblMovInfo: totalCnt=${info?.totalCnt} firstKeys=${info?.atktPsblMovLst?.[0] ? Object.keys(info.atktPsblMovLst[0]).join(',') : 'none'}`);
+      console.log(`  body sample: ${JSON.stringify(r.body).slice(0, 1500)}`);
+    }
     // events index hset (lazy fetch indexEvent 와 같은 키)
     if (entries.length) {
       const pipeline = redis.pipeline();
