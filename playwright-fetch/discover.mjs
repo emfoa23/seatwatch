@@ -1,27 +1,22 @@
 /**
- * Discovery mode — 사이트의 DOM + traffic 자동 분석.
+ * Discovery mode — 사이트의 검색 + 상세 + 예매 흐름 traffic 자동 캡쳐.
  *
- * 1) 메인 페이지 진입
- * 2) 모든 outgoing requests 캡쳐 (URL, method, headers, body)
- * 3) 검색 관련 DOM elements 찾기 (button[aria-label*="검색"], input[type="search"] 등)
- * 4) 검색 입력 시도 + Enter → 그 결과 fire 되는 api 호출 캡쳐
- * 5) 모두 JSON 으로 dump → artifact 로 upload
+ * 흐름:
+ *   1) 홈 페이지 진입 → networkidle
+ *   2) (SEARCH_URL 패턴 있으면) 검색 페이지 navigate → fetch/XHR 캡쳐
+ *      (없으면) 헤더 검색 버튼 click → search input fill + Enter
+ *   3) 검색 결과 첫 카드 클릭 → 상세 페이지 → fetch/XHR 캡쳐
+ *   4) 예매/날짜/시간 element 클릭 시도 → 좌석/timeslot endpoint 캡쳐
  *
- * Usage:
- *   SITE=cgv QUERY="마이클" node discover.mjs
- *   SITE=lottecinema QUERY="어벤져스" node discover.mjs
+ * 결과: discover-<site>.json + 단계별 screenshot.
+ *
+ * Usage:  SITE=cgv QUERY="마이클" node discover.mjs
  */
 import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';
 
 const SITE = process.env.SITE || 'cgv';
 const QUERY = process.env.QUERY || '마이클';
-// SEARCH_URL 패턴이 있으면 진입 직후 search 페이지로 navigate 해서 traffic 캡쳐
-const SEARCH_URL_BY_SITE = {
-  cgv: (q) => `https://cgv.co.kr/tme/itgrSrch?swrd=${encodeURIComponent(q)}`,
-  lottecinema: (q) => `https://www.lottecinema.co.kr/NLCHS/Search?searchKeyword=${encodeURIComponent(q)}`,
-  megabox: (q) => `https://www.megabox.co.kr/search?content=${encodeURIComponent(q)}`,
-};
 
 const HOME_BY_SITE = {
   cgv: 'https://cgv.co.kr/',
@@ -29,6 +24,12 @@ const HOME_BY_SITE = {
   megabox: 'https://www.megabox.co.kr/',
   interpark: 'https://tickets.interpark.com/',
   catchtable: 'https://app.catchtable.co.kr/',
+};
+
+// 알려진 search URL 패턴 (있으면 직접 navigate, 없으면 input fire 시도)
+const SEARCH_URL_BY_SITE = {
+  cgv: (q) => `https://cgv.co.kr/tme/itgrSrch?swrd=${encodeURIComponent(q)}`,
+  interpark: (q) => `https://tickets.interpark.com/contents/search?keyword=${encodeURIComponent(q)}`,
 };
 
 const home = HOME_BY_SITE[SITE];
@@ -40,6 +41,12 @@ if (!home) {
 const requests = [];
 const responses = [];
 const jsBundles = [];
+const phaseMarkers = [];
+
+function markPhase(name) {
+  phaseMarkers.push({ name, requestIdx: requests.length, t: Date.now() });
+  console.log(`\n[discover] ===== phase: ${name} (req idx ${requests.length}) =====`);
+}
 
 async function main() {
   const browser = await chromium.launch({
@@ -57,8 +64,6 @@ async function main() {
   });
 
   const page = await ctx.newPage();
-
-  // 모든 request 캡쳐 (XHR/fetch 만)
   page.on('request', (req) => {
     const t = req.resourceType();
     if (t === 'xhr' || t === 'fetch') {
@@ -67,12 +72,17 @@ async function main() {
         method: req.method(),
         type: t,
         headers: req.headers(),
-        postData: req.postData()?.slice(0, 1000) ?? null,
+        postData: req.postData()?.slice(0, 2000) ?? null,
       });
     } else if (t === 'script') {
-      // JS bundle URLs
       const u = req.url();
-      if (u.includes('.js') && !u.includes('analytics') && !u.includes('gtm') && !u.includes('kakao')) {
+      if (
+        u.includes('.js') &&
+        !u.includes('analytics') &&
+        !u.includes('gtm') &&
+        !u.includes('kakao') &&
+        !u.includes('googletag')
+      ) {
         jsBundles.push(u);
       }
     }
@@ -83,146 +93,196 @@ async function main() {
       let bodyPreview = '';
       try {
         const txt = await resp.text();
-        bodyPreview = txt.slice(0, 400);
+        bodyPreview = txt.slice(0, 600);
       } catch {
         /* ignore */
       }
-      responses.push({
-        url: resp.url(),
-        status: resp.status(),
-        bodyPreview,
-      });
+      responses.push({ url: resp.url(), status: resp.status(), bodyPreview });
     }
   });
 
-  console.log(`[discover] visiting ${home}`);
+  // ============ PHASE 1: home ============
+  markPhase('home');
   try {
     await page.goto(home, { waitUntil: 'networkidle', timeout: 30_000 });
   } catch (e) {
-    console.log('goto error:', String(e).slice(0, 200));
+    console.log('home goto error:', String(e).slice(0, 200));
   }
-  console.log(`[discover] after warmup: url=${page.url()} title=${(await page.title().catch(() => '?')).slice(0, 80)}`);
+  console.log(
+    `  url=${page.url()} title=${(await page.title().catch(() => '?')).slice(0, 80)}`,
+  );
+  await page.screenshot({ path: `discover-${SITE}-1-home.png` }).catch(() => null);
 
-  // SEARCH URL pattern 있으면 진입 → 발생하는 모든 fetch/XHR 캡쳐
-  const sUrlFn = SEARCH_URL_BY_SITE[SITE];
-  if (sUrlFn) {
-    const before = requests.length;
-    const url = sUrlFn(QUERY);
-    console.log(`[discover] navigate to search page: ${url}`);
-    try {
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 });
-    } catch (e) {
-      console.log('search-goto error:', String(e).slice(0, 200));
-    }
-    await page.waitForTimeout(4_000);
-    console.log(`[discover] after search-goto: ${page.url()}`);
-    const newReqs = requests.slice(before);
-    console.log(`\n[discover] requests after search-page goto (${newReqs.length}):`);
-    for (const r of newReqs) console.log(`  ${r.method} ${r.url.slice(0, 160)}`);
-  }
-
-  // DOM 안 search 관련 elements 자동 발견
+  // DOM search elements 발견
   const domInfo = await page.evaluate(() => {
-    const results = [];
     const candidates = [
       'input[type="search"]',
-      'input[role="searchbox"]',
       'input[placeholder*="검색"]',
-      'input[placeholder*="search" i]',
       'input[name*="search" i]',
       'input[name*="keyword" i]',
       'input[name*="query" i]',
       'button[aria-label*="검색"]',
-      'button[aria-label*="search" i]',
       'a[aria-label*="검색"]',
-      '[role="search"]',
-      'header [class*="search" i]',
       '[class*="searchBtn" i]',
       '[class*="search-btn" i]',
       '[class*="search_btn" i]',
-      '[data-cy*="search" i]',
-      '[data-testid*="search" i]',
+      '[id*="search" i][role="button"]',
     ];
+    const out = [];
     for (const sel of candidates) {
       const els = document.querySelectorAll(sel);
       if (els.length) {
-        const sample = els[0];
-        results.push({
+        const first = els[0];
+        out.push({
           selector: sel,
           count: els.length,
-          firstTag: sample.tagName,
-          firstOuter: sample.outerHTML?.slice(0, 300),
-          visible: sample.offsetParent !== null,
+          firstTag: first.tagName,
+          firstOuter: first.outerHTML?.slice(0, 250),
+          visible: first.offsetParent !== null,
         });
       }
     }
-    return results;
+    return out;
   });
-
-  console.log('\n[discover] DOM search elements:');
-  for (const d of domInfo) console.log(' -', d.selector, `count=${d.count} visible=${d.visible}`);
-
-  await page.screenshot({ path: `discover-${SITE}-1.png`, fullPage: false }).catch(() => null);
-
-  // search 시도 — visible 한 첫 input 클릭 후 입력
-  const visibleInput = domInfo.find((d) => d.firstTag === 'INPUT' && d.visible);
-  const visibleBtn = domInfo.find((d) => d.firstTag !== 'INPUT' && d.visible);
-
-  if (visibleBtn && !visibleInput) {
-    console.log(`\n[discover] clicking search button: ${visibleBtn.selector}`);
-    try {
-      await page.locator(visibleBtn.selector).first().click({ timeout: 3_000 });
-      await page.waitForTimeout(1_500);
-      await page.screenshot({ path: `discover-${SITE}-2-after-click.png` }).catch(() => null);
-    } catch (e) {
-      console.log('  click failed:', String(e).slice(0, 200));
-    }
+  console.log('  DOM search elements:');
+  for (const d of domInfo) {
+    console.log(`   - ${d.selector} count=${d.count} tag=${d.firstTag} visible=${d.visible}`);
   }
 
-  // 다시 visible input 찾기 (button click 후 열린 검색바)
-  const inputSelectors = [
-    'input[type="search"]:visible',
-    'input[placeholder*="검색"]:visible',
-    'input[role="searchbox"]:visible',
-    'input[name*="search" i]:visible',
-    'input[name*="keyword" i]:visible',
-  ];
-
-  const beforeReqLen = requests.length;
-  let filled = false;
-  for (const sel of inputSelectors) {
+  // ============ PHASE 2: search ============
+  markPhase('search');
+  const sUrlFn = SEARCH_URL_BY_SITE[SITE];
+  let searchSucceeded = false;
+  if (sUrlFn) {
+    const url = sUrlFn(QUERY);
+    console.log(`  navigate ${url}`);
     try {
-      const el = page.locator(sel.replace(':visible', '')).first();
-      if (await el.isVisible({ timeout: 2_000 })) {
-        await el.click({ clickCount: 3 });
-        await el.fill(QUERY);
-        await page.keyboard.press('Enter');
-        console.log(`[discover] filled via: ${sel}`);
-        filled = true;
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 });
+      searchSucceeded = true;
+    } catch (e) {
+      console.log('  search goto error:', String(e).slice(0, 200));
+    }
+  } else {
+    // 검색 버튼 클릭 → input fill + Enter
+    const buttonCandidates = [
+      '[class*="searchBtn" i]',
+      '[class*="search-btn" i]',
+      'button[aria-label*="검색"]',
+      'a[aria-label*="검색"]',
+    ];
+    for (const sel of buttonCandidates) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.isVisible({ timeout: 1_500 })) {
+          await el.click({ timeout: 3_000 });
+          console.log(`  clicked search btn: ${sel}`);
+          await page.waitForTimeout(800);
+          break;
+        }
+      } catch {
+        /* try next */
+      }
+    }
+    const inputCandidates = [
+      'input[type="search"]',
+      'input[placeholder*="검색"]',
+      'input[name*="search" i]',
+      'input[name*="keyword" i]',
+    ];
+    for (const sel of inputCandidates) {
+      try {
+        const el = page.locator(sel).first();
+        if (await el.isVisible({ timeout: 1_500 })) {
+          await el.click({ clickCount: 3 });
+          await el.fill(QUERY);
+          await page.keyboard.press('Enter');
+          console.log(`  filled input ${sel}`);
+          searchSucceeded = true;
+          break;
+        }
+      } catch {
+        /* try next */
+      }
+    }
+  }
+  if (searchSucceeded) {
+    await page.waitForTimeout(6_000); // 검색 후 fetch 완료 대기
+    console.log(`  after search: ${page.url()}`);
+    await page.screenshot({ path: `discover-${SITE}-2-search.png` }).catch(() => null);
+  } else {
+    console.log('  search fire 실패');
+  }
+
+  // ============ PHASE 3: 첫 결과 클릭 → 상세 ============
+  markPhase('detail');
+  // 결과 카드 셀렉터 candidates (사이트별로 다름)
+  const resultCandidates = [
+    'a[href*="movie" i]',
+    'a[href*="detail" i]',
+    'a[href*="goods" i]',
+    'a[href*="shop" i]',
+    'a[href*="restaurant" i]',
+    '[class*="card" i] a',
+    '[class*="movie-item" i] a',
+    'main a:has(img)',
+  ];
+  let clickedDetail = false;
+  for (const sel of resultCandidates) {
+    try {
+      const el = page.locator(sel).first();
+      if (await el.isVisible({ timeout: 1_500 })) {
+        const href = await el.getAttribute('href').catch(() => null);
+        console.log(`  clicking first card via: ${sel} (href=${href?.slice(0, 80)})`);
+        await el.click({ timeout: 3_000 });
+        clickedDetail = true;
         break;
       }
     } catch {
       /* try next */
     }
   }
-  if (!filled) console.log('[discover] no visible input — search not fired');
-
-  // 검색 fire 후 발생하는 fetch/XHR 캡쳐
-  await page.waitForTimeout(8_000);
-  await page.screenshot({ path: `discover-${SITE}-3-after-search.png` }).catch(() => null);
-
-  const newRequests = requests.slice(beforeReqLen);
-  console.log(`\n[discover] requests after search (${newRequests.length}):`);
-  for (const r of newRequests) {
-    console.log(`  ${r.method} ${r.url.slice(0, 160)}`);
+  if (clickedDetail) {
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => null);
+    await page.waitForTimeout(3_000);
+    console.log(`  detail url: ${page.url()}`);
+    await page.screenshot({ path: `discover-${SITE}-3-detail.png` }).catch(() => null);
   }
 
-  // dump 파일
+  // ============ PHASE 4: 예매/날짜 선택 시도 ============
+  markPhase('booking');
+  const bookingCandidates = [
+    'a:has-text("예매")',
+    'button:has-text("예매")',
+    'a:has-text("바로 예매")',
+    'a:has-text("예약")',
+    'button:has-text("예약")',
+    '[class*="booking" i]',
+    '[class*="reserve" i]',
+  ];
+  for (const sel of bookingCandidates) {
+    try {
+      const el = page.locator(sel).first();
+      if (await el.isVisible({ timeout: 1_500 })) {
+        console.log(`  clicking booking: ${sel}`);
+        await el.click({ timeout: 3_000 });
+        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => null);
+        await page.waitForTimeout(4_000);
+        console.log(`  booking url: ${page.url()}`);
+        await page.screenshot({ path: `discover-${SITE}-4-booking.png` }).catch(() => null);
+        break;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+
+  // 모든 dump → JSON
   const out = {
     site: SITE,
     query: QUERY,
     finalUrl: page.url(),
     title: await page.title().catch(() => null),
+    phaseMarkers,
     domInfo,
     jsBundles: Array.from(new Set(jsBundles)),
     requests,
