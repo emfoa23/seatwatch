@@ -1,0 +1,44 @@
+[
+  {
+    "timestamp": "2026-05-29T07:06:52.730064+00:00",
+    "freshness_violations": [],
+    "crawl_jobs": {
+      "rows": [],
+      "violations": []
+    },
+    "watch_stale": [
+      {
+        "kind": "watch_stale",
+        "site": "catchtable",
+        "count": 1
+      },
+      {
+        "kind": "watch_stale",
+        "site": "cgv",
+        "count": 1
+      },
+      {
+        "kind": "watch_stale",
+        "site": "interpark",
+        "count": 1
+      },
+      {
+        "kind": "watch_stale",
+        "site": "lotte",
+        "count": 1
+      },
+      {
+        "kind": "watch_stale",
+        "site": "megabox",
+        "count": 3
+      }
+    ],
+    "notifications": {
+      "failed": 0,
+      "total": 0,
+      "ratio": 0,
+      "violations": []
+    },
+    "total_violations": 5
+  }
+]
