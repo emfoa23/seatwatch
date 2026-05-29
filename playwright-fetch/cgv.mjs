@@ -22,7 +22,8 @@ const PREFIX = process.env.VALKEY_KEY_PREFIX || 'seatwatch:prod';
 const VALKEY_URL = process.env.VALKEY_URL;
 if (!VALKEY_URL) throw new Error('VALKEY_URL is required');
 
-const TARGET_URL_BASE = 'https://api.cgv.co.kr/tme/more/itgrSrch/searchItgrSrchMov';
+// 실 endpoint: searchItgrSrchAll (Mov 가 아닌 All — discover 로 발견)
+const TARGET_URL_BASE = 'https://api.cgv.co.kr/tme/more/itgrSrch/searchItgrSrchAll';
 const COCD = 'A420';
 
 function normalizeQuery(q) {
@@ -34,27 +35,40 @@ function searchKey(query) {
   return `${PREFIX}:search:cgv:${h}`;
 }
 
-/** Parse CGV 응답 → EventIndexEntry[] (web/lib/types/seat.ts 와 동일 형식) */
-function parseToEntries(json, query) {
-  // CGV response 구조 예상 (실제 응답에서 확정해야 함):
-  // { resultData: { movieList: [{ movieNm, coCdNo, theaters: [...] }] } } 등
-  // 일단 raw 보존 + 가능한 만큼 변환
-  const list = json?.resultData?.movieList || json?.movieList || json?.data?.movieList || [];
+/** Parse CGV 응답 (`searchItgrSrchAll`) → EventIndexEntry[]
+ *  실 구조 (discover 로 분석):
+ *    data.atktPsblMovInfo.atktPsblMovLst[] — 예매가능 영화 (가장 우선)
+ *    data.atktPsblMovTop10Lst[] — 인기 영화
+ *  각 항목에 movieIdx/movieNm/openDt 등.
+ */
+function parseToEntries(json /* , query */) {
   const out = [];
-  for (const m of Array.isArray(list) ? list : []) {
-    const title = m.movieNm || m.title || m.name;
-    const eid = String(m.movieCd || m.movieIdx || m.movieNo || m.coCdNo || '').trim();
-    if (!title || !eid) continue;
-    // 회차 정보가 응답에 포함돼 있지 않으면 첫 entry 1개만 placeholder
+  const dt = new Date(Date.now() + 9 * 3600 * 1000).toISOString().replace('Z', '+09:00');
+  function pushMov(m) {
+    const title = m.movieNm || m.movieNmEn || m.title;
+    const idx = String(m.movieIdx || m.movieCd || m.movieNo || '').trim();
+    if (!title || !idx) return;
     out.push({
       site: 'cgv',
-      externalEventId: `cgv_${eid}`.slice(0, 16),
-      eventDatetime: new Date(Date.now() + 9 * 3600 * 1000).toISOString().replace('Z', '+09:00'),
+      externalEventId: `cgv_${idx}`.slice(0, 16),
+      eventDatetime: dt,
       title,
       venue: 'CGV',
     });
   }
-  return out;
+  const lists = [
+    json?.data?.atktPsblMovInfo?.atktPsblMovLst,
+    json?.data?.atktPsblMovTop10Lst,
+  ];
+  for (const lst of lists) {
+    if (Array.isArray(lst)) lst.forEach(pushMov);
+  }
+  const seen = new Set();
+  return out.filter((e) => {
+    if (seen.has(e.externalEventId)) return false;
+    seen.add(e.externalEventId);
+    return true;
+  });
 }
 
 async function searchOne(page, query) {
@@ -65,7 +79,7 @@ async function searchOne(page, query) {
   console.log(`  goto ${searchUrl}`);
   const respPromise = page
     .waitForResponse(
-      (r) => r.url().includes('/tme/more/itgrSrch/searchItgrSrchMov'),
+      (r) => r.url().includes('/tme/more/itgrSrch/searchItgrSrchAll'),
       { timeout: 20_000 },
     )
     .catch((e) => ({ _error: String(e) }));
