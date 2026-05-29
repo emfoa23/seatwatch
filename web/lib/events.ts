@@ -101,13 +101,7 @@ export async function groupKeyForEvent(site: Site, externalEventId: string): Pro
   return groupKeyOf(entry);
 }
 
-export function encodeGroupKey(key: string): string {
-  return Buffer.from(key, 'utf-8').toString('base64url');
-}
-
-export function decodeGroupKey(encoded: string): string {
-  return Buffer.from(encoded, 'base64url').toString('utf-8');
-}
+export { encodeGroupKey, decodeGroupKey } from './events-key';
 
 export async function listGroups(site: Site, filters?: string | EventFilters, limit = 100): Promise<EventGroup[]> {
   const all = await listEvents(site, filters, 2000);

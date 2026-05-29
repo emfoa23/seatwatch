@@ -1,20 +1,117 @@
-import Link from 'next/link';
-import { listGroups, encodeGroupKey, type EventFilters } from '@/lib/events';
-import { SITE_LABELS, type Site } from '@/lib/types/seat';
-import { SiteLogo } from './Icons';
+'use client';
 
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { SITE_LABELS, type Site, type EventIndexEntry } from '@/lib/types/seat';
+import { encodeGroupKey } from '@/lib/events-key';
+import { SiteLogo } from './Icons';
 import { fmtShortDateTime as fmt } from '@/lib/format';
 
-export async function EventSearch({
-  site,
-  filters,
-  placeholder,
-}: {
-  site: Site;
-  filters: EventFilters;
-  placeholder: string;
-}) {
-  const groups = await listGroups(site, filters, 200);
+interface Group {
+  groupKey: string;
+  title: string;
+  venue: string;
+  region?: string;
+  firstDatetime: string;
+}
+
+function makeGroupKey(site: Site, entry: EventIndexEntry): string {
+  if (site === 'cgv' || site === 'megabox' || site === 'lotte') {
+    return `${entry.venue}__${entry.title}`;
+  }
+  return entry.title;
+}
+
+function groupEntries(site: Site, entries: EventIndexEntry[]): Group[] {
+  const map = new Map<string, Group>();
+  for (const e of entries) {
+    const key = makeGroupKey(site, e);
+    const existing = map.get(key);
+    if (existing) {
+      if (e.eventDatetime < existing.firstDatetime) existing.firstDatetime = e.eventDatetime;
+    } else {
+      map.set(key, {
+        groupKey: key,
+        title: e.title,
+        venue: e.venue,
+        region: e.region,
+        firstDatetime: e.eventDatetime,
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.firstDatetime.localeCompare(b.firstDatetime));
+}
+
+export function EventSearch({ site, placeholder }: { site: Site; placeholder: string }) {
+  const router = useRouter();
+  const sp = useSearchParams();
+  const initialQuery = sp.get('q') ?? '';
+  const [query, setQuery] = useState(initialQuery);
+  const [submitted, setSubmitted] = useState(initialQuery);
+  const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState<'cache' | 'fetch' | 'error' | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const runSearch = useCallback(
+    async (q: string) => {
+      const trimmed = q.trim();
+      if (!trimmed) {
+        setGroups([]);
+        setSource(null);
+        setErrorMsg(null);
+        return;
+      }
+      abortRef.current?.abort();
+      const ctl = new AbortController();
+      abortRef.current = ctl;
+      setLoading(true);
+      setErrorMsg(null);
+      try {
+        const res = await fetch(`/api/search/${site}?q=${encodeURIComponent(trimmed)}`, {
+          signal: ctl.signal,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setSource('error');
+          setErrorMsg(
+            res.status === 429
+              ? `요청이 너무 많습니다. ${data.retryAfter ?? 60}초 후 다시.`
+              : data.error || '검색 실패',
+          );
+          setGroups([]);
+          return;
+        }
+        setSource(data.source);
+        setGroups(groupEntries(site, data.entries as EventIndexEntry[]));
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+        setSource('error');
+        setErrorMsg((e as Error).message);
+        setGroups([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [site],
+  );
+
+  useEffect(() => {
+    if (initialQuery) runSearch(initialQuery);
+    // initialQuery 는 첫 마운트에만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = query.trim();
+    setSubmitted(trimmed);
+    const url = trimmed ? `/${site}?q=${encodeURIComponent(trimmed)}` : `/${site}`;
+    router.replace(url);
+    runSearch(trimmed);
+  };
 
   return (
     <div className="search-page">
@@ -25,68 +122,75 @@ export async function EventSearch({
         </h1>
       </header>
 
-      <form className="filter-form" action={`/${site}`}>
+      <form className="filter-form" onSubmit={onSubmit}>
         <div className="filter-row">
           <input
             name="q"
             type="search"
             placeholder={placeholder}
-            defaultValue={filters.query ?? ''}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             autoComplete="off"
             className="filter-q"
           />
-          <button type="submit" className="btn btn-primary">검색</button>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? '검색 중…' : '검색'}
+          </button>
         </div>
-        <details className="filter-extra" open={!!(filters.dateFrom || filters.dateTo || filters.timeFrom || filters.timeTo)}>
-          <summary>날짜·시간 필터</summary>
-          <div className="filter-grid">
-            <label>
-              <span>날짜 시작</span>
-              <input name="date_from" type="date" defaultValue={filters.dateFrom ?? ''} />
-            </label>
-            <label>
-              <span>날짜 끝</span>
-              <input name="date_to" type="date" defaultValue={filters.dateTo ?? ''} />
-            </label>
-            <label>
-              <span>시간 시작</span>
-              <input name="time_from" type="time" defaultValue={filters.timeFrom ?? ''} />
-            </label>
-            <label>
-              <span>시간 끝</span>
-              <input name="time_to" type="time" defaultValue={filters.timeTo ?? ''} />
-            </label>
-          </div>
-        </details>
+        <p className="filter-hint">
+          {site === 'catchtable'
+            ? '식당명만 검색 가능합니다. (지역·카테고리 검색은 지원하지 않습니다.)'
+            : site === 'interpark'
+              ? '공연명만 검색 가능합니다. (장르·공연장 검색은 지원하지 않습니다.)'
+              : '영화명만 검색 가능합니다. (극장·지역 검색은 지원하지 않습니다.)'}
+        </p>
       </form>
 
-      <p className="search-count">
-        {filters.query ? `"${filters.query}" 검색 결과 ` : ''}{groups.length}건
-      </p>
-
-      {groups.length === 0 ? (
-        <p className="empty">결과가 없습니다.</p>
-      ) : (
+      {!submitted ? (
+        <p className="empty">검색어를 입력하면 결과가 나타납니다.</p>
+      ) : loading ? (
         <ul className="event-list">
-          {groups.map((g) => {
-            const next = g.entries[0];
-            const isRestaurant = site === 'catchtable';
-            return (
-              <li key={g.groupKey}>
-                <Link href={`/${site}/g/${encodeGroupKey(g.groupKey)}`}>
-                  <div className="event-card-body">
-                    <strong className="event-title">{g.title}</strong>
-                    {!isRestaurant && <span className="event-venue">{g.venue}{g.region ? ` · ${g.region}` : ''}</span>}
-                    {isRestaurant && <span className="event-venue">{g.venue}</span>}
-                    <span className="event-datetime">
-                      가장 빠른 일정: {fmt(next.eventDatetime)}
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="event-skeleton" aria-hidden="true">
+              <div className="skeleton-line skeleton-title" />
+              <div className="skeleton-line skeleton-sub" />
+              <div className="skeleton-line skeleton-meta" />
+            </li>
+          ))}
         </ul>
+      ) : source === 'error' ? (
+        <p className="empty">에러: {errorMsg}</p>
+      ) : groups.length === 0 ? (
+        <p className="empty">&quot;{submitted}&quot; 검색 결과가 없습니다.</p>
+      ) : (
+        <>
+          <p className="search-count">
+            &quot;{submitted}&quot; 검색 결과 {groups.length}건
+            {source === 'cache' ? ' · 캐시' : source === 'fetch' ? ' · 실시간' : ''}
+          </p>
+          <ul className="event-list">
+            {groups.map((g) => {
+              const isRestaurant = site === 'catchtable';
+              return (
+                <li key={g.groupKey}>
+                  <Link href={`/${site}/g/${encodeGroupKey(g.groupKey)}`}>
+                    <div className="event-card-body">
+                      <strong className="event-title">{g.title}</strong>
+                      {!isRestaurant && (
+                        <span className="event-venue">
+                          {g.venue}
+                          {g.region ? ` · ${g.region}` : ''}
+                        </span>
+                      )}
+                      {isRestaurant && <span className="event-venue">{g.venue}</span>}
+                      <span className="event-datetime">가장 빠른 일정: {fmt(g.firstDatetime)}</span>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );

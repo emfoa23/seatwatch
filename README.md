@@ -6,8 +6,7 @@ CGV · 메가박스 · 롯데시네마 · 인터파크 티켓 · 캐치테이블
 
 ## 구성
 
-- `web/` — Next.js (App Router). Vercel 배포.
-- `web/scripts/seed-mock.ts` — Mock 데이터 5사 적재 (`npm run seed`).
+- `web/` — Next.js (App Router). Vercel 배포. **Lazy fetch 모델** — 탭 진입 시 검색창만 보이고, 검색·좌석 조회 시점에만 외부 API 호출 + Valkey 캐시.
 - `worker/` — Node.js 알림 큐 consumer. GitHub Actions `notify-drain` 가 매 분 build + drain.
 - `scripts/monitor.py` — Valkey/Neon health 모니터링 (cron-job.org → workflow_dispatch).
 - `.github/workflows/` — CI · notify-drain · monitor-freshness.
@@ -53,29 +52,67 @@ npm run dev              # http://localhost:3000
 
 주요 페이지:
 - `/` — 홈
-- `/cgv` · `/megabox` · `/lotte` · `/interpark` · `/catchtable` — 검색
-- `/<site>/g/<groupKey>` — 그룹 상세 (날짜·시간 picker, 좌석맵, 알림 등록)
+- `/cgv` · `/megabox` · `/lotte` · `/interpark` · `/catchtable` — 검색 (탭 진입 시 검색창만, 결과 list 없음)
+- `/<site>/g/<groupKey>?day=...&screen=...&eid=...` — 그룹 상세 (날짜·상영관·시간 picker, 좌석맵, 알림 등록)
 - `/login` · `/signup` — 인증
 - `/my` · `/my/watches` · `/my/billing` · `/my/payments` · `/my/profile` — 마이페이지
+
+API:
+- `GET /api/search/<site>?q=<name>` — 이름 검색만 (영화명/공연명/식당명). 극장·지역·장르·공연장·카테고리 검색은 거부.
+- `GET /api/snapshot/<site>/<eid>` — 특정 회차/시간대의 좌석/시간슬롯 조회.
+
+캐시 + rate limit:
+- 검색 캐시 1h TTL, 좌석 캐시 5m TTL (`web/lib/cache.ts`).
+- 검색 분당 30회, 좌석 분당 60회 / 유저 또는 IP.
 
 스크립트:
 - `npm run db:push` — drizzle 마이그레이션 push
 - `npm run db:studio` — drizzle studio
 - `npm run typecheck` — TS 검증
-- `npm run seed` — Mock 데이터 210 events 적재
 
-## 데이터 흐름
+## 데이터 흐름 (Lazy fetch 모델)
 
+### 1) 검색
 ```
-[crawler GitHub Actions]  →  Valkey snapshot:<site>:<id>:<dt>  →  [Vercel SSR]  →  브라우저
-                    ↓
-              Neon seat_events + crawl_jobs
-                    ↓
-         빈자리 발생 시 Valkey notify:queue
-                    ↓
-       [GitHub Actions notify-drain (매 분)]
-                    ↓
-                  Resend → 사용자 메일
+[사용자: 영화/공연/식당명 입력]
+       ↓
+[GET /api/search/<site>?q=...]
+       ↓                             ↑ (캐시 hit 1h TTL)
+[Valkey search:<site>:<hash>]  ─────┘
+       ↓ miss
+[fetcher.search() → 외부 사이트 API]
+       ↓
+[Valkey 캐시 set + events index hset]
+       ↓
+[브라우저: 결과 list 렌더]
+```
+
+### 2) 좌석/시간대 조회
+```
+[사용자: 날짜·상영관·시간 picker 선택]
+       ↓
+[GET /api/snapshot/<site>/<eid>]
+       ↓                              ↑ (캐시 hit 5m TTL)
+[Valkey snapshot:<site>:<eid>:<dt>] ─┘
+       ↓ miss
+[fetcher.snapshot() → 외부 사이트 API]
+       ↓
+[Valkey snapshot set + freshness 갱신]
+       ↓
+[브라우저: SeatMap / TimeSlots 렌더]
+```
+
+### 3) 활성 watch 만 cron 폴링
+```
+[활성 watch_targets ── GitHub Actions ──→ 사이트별 fetcher.snapshot()]
+                                        ↓
+                                   diff: occupied → available
+                                        ↓
+                                Valkey notify:queue (LPUSH)
+                                        ↓
+                      [GitHub Actions notify-drain (매 분)]
+                                        ↓
+                                  Resend → 사용자 메일
 ```
 
 ## 배포

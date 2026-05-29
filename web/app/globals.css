@@ -451,3 +451,39 @@ a:hover { text-decoration: underline; }
 .watch-body .dim { color: #6b7280; font-size: 12px; }
 .watch-body .small { font-size: 11px; }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* ====== Lazy fetch skeletons + hints (Phase 1) ====== */
+.filter-hint { margin-top: 6px; font-size: 12px; color: #6b7280; }
+.event-skeleton {
+  background: #fff; padding: 14px; border-radius: 8px; border: 1px solid #e5e7eb;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.skeleton-line {
+  height: 12px; background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background-size: 200% 100%; animation: shimmer 1.4s linear infinite; border-radius: 4px;
+}
+.skeleton-title { width: 60%; height: 18px; }
+.skeleton-sub { width: 40%; }
+.skeleton-meta { width: 30%; height: 10px; }
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.snapshot-loading {
+  background: #fff; padding: 18px; border-radius: 10px; border: 1px solid #e5e7eb;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.seatmap-skeleton { display: flex; flex-direction: column; gap: 6px; }
+.skeleton-row { height: 22px; background: #f3f4f6; border-radius: 4px; animation: shimmer 1.4s linear infinite;
+  background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%); background-size: 200% 100%; }
+.snapshot-error {
+  background: #fff; padding: 16px; border-radius: 10px; border: 1px solid #fecaca;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+}
+.btn-refresh {
+  margin-left: auto; padding: 4px 10px; font-size: 12px; border-radius: 6px;
+  border: 1px solid #d1d5db; background: #f9fafb; color: #374151; cursor: pointer;
+}
+.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+.source-cache { background: #e0e7ff; color: #3730a3; }
+.source-fetch { background: #d1fae5; color: #065f46; }

@@ -1,14 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getGroup, encodeGroupKey } from '@/lib/events';
-import { getSnapshot } from '@/lib/snapshot';
+import { getCachedSnapshot } from '@/lib/cache';
 import { SITE_LABELS, type Site, MOVIE_SITES } from '@/lib/types/seat';
 import { loadAllWatchContexts, resolveHighlight } from '@/lib/watch-context';
 import { SiteLogo } from './Icons';
-import { fmtDayLabel, fmtTime, fmtDateTime } from '@/lib/format';
-import { SeatMap } from './SeatMap';
-import { TimeSlots } from './TimeSlots';
-import { WatchHandler } from './WatchHandler';
+import { fmtDayLabel, fmtTime } from '@/lib/format';
+import { SnapshotProgressive } from './SnapshotProgressive';
 import { WatchBannerList } from './WatchBannerList';
 
 function dayKey(iso: string): string {
@@ -21,11 +19,15 @@ export async function GroupDetail({
   site,
   groupKey,
   eid,
+  day,
+  screen,
   watch,
 }: {
   site: Site;
   groupKey: string;
   eid?: string;
+  day?: string;
+  screen?: string;
   watch?: string;
 }) {
   const group = await getGroup(site, groupKey);
@@ -34,27 +36,60 @@ export async function GroupDetail({
   const isMovieSite = MOVIE_SITES.includes(site);
   const isRestaurant = site === 'catchtable';
 
-  const selectedEntry = (eid && group.entries.find((e) => e.externalEventId === eid)) || group.entries[0];
-  const selDay = dayKey(selectedEntry.eventDatetime);
-  const selScreen = selectedEntry.screen ?? '';
-
+  // 1) 날짜 picker — 식당이면 ?day= 필요, 영화/공연은 default 첫 날짜
   const days = Array.from(new Set(group.entries.map((e) => dayKey(e.eventDatetime)))).sort();
+  const selDay = day && days.includes(day)
+    ? day
+    : eid
+      ? dayKey((group.entries.find((e) => e.externalEventId === eid) ?? group.entries[0]).eventDatetime)
+      : days[0];
+
   const dayEntries = group.entries.filter((e) => dayKey(e.eventDatetime) === selDay);
 
-  // 영화관: dayEntries 안에서 screen 별 entries
+  // 2) 상영관 picker (영화관)
   const screens = isMovieSite
     ? Array.from(new Set(dayEntries.map((e) => e.screen ?? '')))
     : [];
+  const selScreen = isMovieSite
+    ? (screen && screens.includes(screen)
+        ? screen
+        : eid
+          ? (dayEntries.find((e) => e.externalEventId === eid)?.screen ?? screens[0] ?? '')
+          : screens[0] ?? '')
+    : '';
+
+  // 3) 시간 picker
   const screenEntries = isMovieSite
     ? dayEntries.filter((e) => (e.screen ?? '') === selScreen).sort((a, b) => a.eventDatetime.localeCompare(b.eventDatetime))
     : dayEntries.sort((a, b) => a.eventDatetime.localeCompare(b.eventDatetime));
 
-  const { snapshot, source } = await getSnapshot(site, selectedEntry.externalEventId);
-  const contexts = await loadAllWatchContexts(site, selectedEntry.externalEventId);
+  const selectedEntry = eid
+    ? screenEntries.find((e) => e.externalEventId === eid) ?? screenEntries[0] ?? dayEntries[0]
+    : isRestaurant
+      ? dayEntries[0]
+      : undefined;
+
+  // Lazy snapshot: 조건 충족 시 fetch 활성화
+  // 식당: selDay 만 결정되면 ready
+  // 영화/공연: selectedEntry (eid) 가 있어야 ready
+  const ready = isRestaurant ? !!selDay : !!selectedEntry;
+  const snapshotKey = isRestaurant ? dayEntries[0] : selectedEntry;
+  const cachedSnap =
+    snapshotKey
+      ? await getCachedSnapshot(site, snapshotKey.externalEventId, snapshotKey.eventDatetime)
+      : null;
+
+  const contexts = snapshotKey ? await loadAllWatchContexts(site, snapshotKey.externalEventId) : [];
   const highlighted = resolveHighlight(contexts, watch);
 
   const enc = encodeGroupKey(groupKey);
-  const linkFor = (entryId: string) => `/${site}/g/${enc}?eid=${encodeURIComponent(entryId)}`;
+  const linkFor = (params: { eid?: string; day?: string; screen?: string }) => {
+    const q = new URLSearchParams();
+    if (params.day) q.set('day', params.day);
+    if (params.screen) q.set('screen', params.screen);
+    if (params.eid) q.set('eid', params.eid);
+    return `/${site}/g/${enc}${q.toString() ? '?' + q.toString() : ''}`;
+  };
 
   return (
     <div className="group-detail">
@@ -69,11 +104,6 @@ export async function GroupDetail({
           {isRestaurant && <p className="venue">{group.venue}</p>}
           <p className="group-quick-links">
             <Link href={`/${site}?q=${encodeURIComponent(group.title)}`}>이 {isRestaurant ? '식당' : '제목'} 다른 검색 ↗</Link>
-            {!isRestaurant && (
-              <Link href={`/${site}?q=${encodeURIComponent(group.venue)}`} style={{ marginLeft: 12 }}>
-                이 {isMovieSite ? '극장' : '공연장'} 다른 일정 ↗
-              </Link>
-            )}
           </p>
         </div>
       </header>
@@ -81,38 +111,32 @@ export async function GroupDetail({
       <section className="picker">
         <h2 className="picker-label">날짜</h2>
         <div className="day-picker">
-          {days.map((d) => {
-            const firstOnDay = group.entries.find((e) => dayKey(e.eventDatetime) === d)!;
-            return (
-              <Link
-                key={d}
-                href={linkFor(firstOnDay.externalEventId)}
-                className={`day-chip ${d === selDay ? 'active' : ''}`}
-                replace
-              >
-                {fmtDayLabel(d + 'T00:00:00')}
-              </Link>
-            );
-          })}
+          {days.map((d) => (
+            <Link
+              key={d}
+              href={linkFor({ day: d })}
+              className={`day-chip ${d === selDay ? 'active' : ''}`}
+              replace
+            >
+              {fmtDayLabel(d + 'T00:00:00')}
+            </Link>
+          ))}
         </div>
 
         {isMovieSite && screens.length > 0 && (
           <>
             <h2 className="picker-label">상영관</h2>
             <div className="venue-picker">
-              {screens.map((sc) => {
-                const firstOnScreen = dayEntries.find((e) => (e.screen ?? '') === sc)!;
-                return (
-                  <Link
-                    key={sc || '_none'}
-                    href={linkFor(firstOnScreen.externalEventId)}
-                    className={`venue-chip ${sc === selScreen ? 'active' : ''}`}
-                    replace
-                  >
-                    <span className="venue-name">{sc || '본관'}</span>
-                  </Link>
-                );
-              })}
+              {screens.map((sc) => (
+                <Link
+                  key={sc || '_none'}
+                  href={linkFor({ day: selDay, screen: sc })}
+                  className={`venue-chip ${sc === selScreen ? 'active' : ''}`}
+                  replace
+                >
+                  <span className="venue-name">{sc || '본관'}</span>
+                </Link>
+              ))}
             </div>
           </>
         )}
@@ -124,8 +148,12 @@ export async function GroupDetail({
               {screenEntries.map((e) => (
                 <Link
                   key={e.externalEventId}
-                  href={linkFor(e.externalEventId)}
-                  className={`time-chip ${e.externalEventId === selectedEntry.externalEventId ? 'active' : ''}`}
+                  href={linkFor({
+                    day: selDay,
+                    screen: isMovieSite ? selScreen : undefined,
+                    eid: e.externalEventId,
+                  })}
+                  className={`time-chip ${e.externalEventId === selectedEntry?.externalEventId ? 'active' : ''}`}
                   replace
                 >
                   {fmtTime(e.eventDatetime)}
@@ -136,28 +164,18 @@ export async function GroupDetail({
         )}
       </section>
 
-      <section className="snapshot-meta">
-        <span className={`source source-${source}`}>{source === 'valkey' ? '실시간' : 'MOCK'}</span>
-        {snapshot.capturedAt && !Number.isNaN(new Date(snapshot.capturedAt).getTime()) ? (
-          <span className="captured">최근 갱신: {fmtDateTime(snapshot.capturedAt)}</span>
-        ) : (
-          <span className="captured dim">갱신 정보 없음</span>
-        )}
-      </section>
-
       <WatchBannerList contexts={contexts} />
 
-      <WatchHandler
-        site={site}
-        externalEventId={selectedEntry.externalEventId}
-        eventDatetime={snapshot.eventDatetime}
-        selectorMode={isRestaurant ? 'time' : 'seat'}
-        maxParty={snapshot.maxCapacity}
-      >
-        {isRestaurant
-          ? <TimeSlots snapshot={snapshot} registered={highlighted} />
-          : <SeatMap snapshot={snapshot} registered={highlighted} />}
-      </WatchHandler>
+      {snapshotKey && (
+        <SnapshotProgressive
+          site={site}
+          externalEventId={snapshotKey.externalEventId}
+          initial={cachedSnap}
+          registered={highlighted}
+          mode={isRestaurant ? 'time' : 'seat'}
+          ready={ready}
+        />
+      )}
     </div>
   );
 }
