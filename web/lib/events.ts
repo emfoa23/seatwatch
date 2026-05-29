@@ -87,7 +87,11 @@ export interface EventGroup {
 }
 
 export function groupKeyOf(entry: EventIndexEntry): string {
-  // 모든 사이트: title 만 기준 — 영화관은 그룹 상세 안에서 venue picker 로 선택
+  // 영화관: (venue, title) — 카드 1장 = 한 극장 한 영화. 안에서 날짜→상영관(screen)→시간
+  // 공연/식당: title — venue 가 단일
+  if (entry.site === 'cgv' || entry.site === 'megabox' || entry.site === 'lotte') {
+    return `${entry.venue}__${entry.title}`;
+  }
   return entry.title;
 }
 

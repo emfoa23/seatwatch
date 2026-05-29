@@ -34,21 +34,20 @@ export async function GroupDetail({
   const isMovieSite = MOVIE_SITES.includes(site);
   const isRestaurant = site === 'catchtable';
 
-  // selectedEntry: eid 일치 → 없으면 첫 entry
   const selectedEntry = (eid && group.entries.find((e) => e.externalEventId === eid)) || group.entries[0];
   const selDay = dayKey(selectedEntry.eventDatetime);
-  const selVenue = selectedEntry.venue;
+  const selScreen = selectedEntry.screen ?? '';
 
-  // 날짜 list (전체)
   const days = Array.from(new Set(group.entries.map((e) => dayKey(e.eventDatetime)))).sort();
-  // 선택 day 의 entries
   const dayEntries = group.entries.filter((e) => dayKey(e.eventDatetime) === selDay);
-  // 선택 day 의 venue list
-  const venuesOnDay = Array.from(new Set(dayEntries.map((e) => e.venue)));
-  // 선택 day + venue 의 entries (시간)
-  const timesOnVenue = dayEntries.filter((e) => e.venue === selVenue).sort(
-    (a, b) => a.eventDatetime.localeCompare(b.eventDatetime),
-  );
+
+  // 영화관: dayEntries 안에서 screen 별 entries
+  const screens = isMovieSite
+    ? Array.from(new Set(dayEntries.map((e) => e.screen ?? '')))
+    : [];
+  const screenEntries = isMovieSite
+    ? dayEntries.filter((e) => (e.screen ?? '') === selScreen).sort((a, b) => a.eventDatetime.localeCompare(b.eventDatetime))
+    : dayEntries.sort((a, b) => a.eventDatetime.localeCompare(b.eventDatetime));
 
   const { snapshot, source } = await getSnapshot(site, selectedEntry.externalEventId);
   const contexts = await loadAllWatchContexts(site, selectedEntry.externalEventId);
@@ -66,19 +65,18 @@ export async function GroupDetail({
             <span className="badge-text">{SITE_LABELS[site]}</span>
           </div>
           <h1>{group.title}</h1>
-          {isMovieSite && <p className="venue">{selVenue}{selectedEntry.region ? ` · ${selectedEntry.region}` : ''}</p>}
-          {!isMovieSite && !isRestaurant && <p className="venue">{group.venue}{group.region ? ` · ${group.region}` : ''}</p>}
+          {!isRestaurant && <p className="venue">{group.venue}{group.region ? ` · ${group.region}` : ''}</p>}
           {isRestaurant && <p className="venue">{group.venue}</p>}
           <p className="group-summary">
             {days.length}일 · 총 {group.entries.length}회차
-            {isMovieSite && ` · ${new Set(group.entries.map((e) => e.venue)).size}개 극장`}
+            {isMovieSite && screens.length > 0 && ` · ${new Set(group.entries.map((e) => e.screen ?? '')).size}개 상영관`}
             {group.category && <span className="event-category" style={{ marginLeft: 8 }}>{group.category}</span>}
           </p>
           <p className="group-quick-links">
             <Link href={`/${site}?q=${encodeURIComponent(group.title)}`}>이 {isRestaurant ? '식당' : '제목'} 다른 검색 ↗</Link>
-            {isMovieSite && (
-              <Link href={`/${site}?q=${encodeURIComponent(selVenue)}`} style={{ marginLeft: 12 }}>
-                이 극장 다른 일정 ↗
+            {!isRestaurant && (
+              <Link href={`/${site}?q=${encodeURIComponent(group.venue)}`} style={{ marginLeft: 12 }}>
+                이 {isMovieSite ? '극장' : '공연장'} 다른 일정 ↗
               </Link>
             )}
           </p>
@@ -103,21 +101,21 @@ export async function GroupDetail({
           })}
         </div>
 
-        {isMovieSite && venuesOnDay.length > 0 && (
+        {isMovieSite && screens.length > 0 && (
           <>
             <h2 className="picker-label">상영관</h2>
             <div className="venue-picker">
-              {venuesOnDay.map((v) => {
-                const firstOnVenue = dayEntries.find((e) => e.venue === v)!;
-                const timesCount = dayEntries.filter((e) => e.venue === v).length;
+              {screens.map((sc) => {
+                const firstOnScreen = dayEntries.find((e) => (e.screen ?? '') === sc)!;
+                const timesCount = dayEntries.filter((e) => (e.screen ?? '') === sc).length;
                 return (
                   <Link
-                    key={v}
-                    href={linkFor(firstOnVenue.externalEventId)}
-                    className={`venue-chip ${v === selVenue ? 'active' : ''}`}
+                    key={sc || '_none'}
+                    href={linkFor(firstOnScreen.externalEventId)}
+                    className={`venue-chip ${sc === selScreen ? 'active' : ''}`}
                     replace
                   >
-                    <span className="venue-name">{v}</span>
+                    <span className="venue-name">{sc || '본관'}</span>
                     <span className="venue-times">{timesCount}회차</span>
                   </Link>
                 );
@@ -130,7 +128,7 @@ export async function GroupDetail({
           <>
             <h2 className="picker-label">시간</h2>
             <div className="time-picker">
-              {timesOnVenue.map((e) => (
+              {screenEntries.map((e) => (
                 <Link
                   key={e.externalEventId}
                   href={linkFor(e.externalEventId)}
