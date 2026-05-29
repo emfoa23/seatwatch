@@ -2,23 +2,25 @@ name: playwright-fetch
 
 # Playwright + Chromium 으로 Cloudflare WAF 우회 → 실 endpoint 호출 → Valkey 적재.
 # CGV, CatchTable 등 Cloudflare-protected 사이트.
+# 또는 discover 모드로 사이트 traffic 분석.
 #
 # 호출:
-#   workflow_dispatch with input `site` (cgv | catchtable) + `queries` (CSV)
-#   Vercel function 이 GH API 로 트리거.
+#   workflow_dispatch with input `site` (cgv | catchtable | discover) + `queries` (CSV)
+#   discover 모드: site=discover, queries="<actual-site>:<query>" 형식
 
 on:
   workflow_dispatch:
     inputs:
       site:
-        description: '사이트 (cgv | catchtable)'
+        description: '사이트 또는 discover'
         required: true
         type: choice
         options:
           - cgv
           - catchtable
+          - discover
       queries:
-        description: '검색어 (CSV — "마이클,어벤져스" 등)'
+        description: '검색어 (CSV) 또는 discover 시 "site:query"'
         required: true
         type: string
 
@@ -29,7 +31,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
 
     steps:
       - uses: actions/checkout@v4
@@ -46,19 +48,28 @@ jobs:
           npm ci
           npx playwright install chromium --with-deps
 
-      - name: Run ${{ inputs.site }} fetch
+      - name: Run fetch / discover
         working-directory: playwright-fetch
         env:
           VALKEY_URL: ${{ secrets.VALKEY_URL }}
           VALKEY_KEY_PREFIX: ${{ secrets.VALKEY_KEY_PREFIX }}
-          QUERIES: ${{ inputs.queries }}
-        run: node ${{ inputs.site }}.mjs
+        run: |
+          if [ "${{ inputs.site }}" = "discover" ]; then
+            # discover 모드: queries=site:query
+            IFS=':' read -r sub_site sub_query <<< "${{ inputs.queries }}"
+            echo "discover site=$sub_site query=$sub_query"
+            SITE="$sub_site" QUERY="$sub_query" node discover.mjs
+          else
+            QUERIES='${{ inputs.queries }}' node ${{ inputs.site }}.mjs
+          fi
 
-      - name: Upload debug screenshots
+      - name: Upload artifacts (screenshots + discover dumps)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-screenshots-${{ inputs.site }}
-          path: playwright-fetch/*.png
+          name: playwright-${{ inputs.site }}
+          path: |
+            playwright-fetch/*.png
+            playwright-fetch/*.json
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7
