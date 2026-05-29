@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getGroup, encodeGroupKey } from '@/lib/events';
 import { getSnapshot } from '@/lib/snapshot';
-import { SITE_LABELS, type Site } from '@/lib/types/seat';
+import { SITE_LABELS, type Site, MOVIE_SITES } from '@/lib/types/seat';
 import { loadAllWatchContexts, resolveHighlight } from '@/lib/watch-context';
 import { SiteLogo } from './Icons';
 import { fmtDayLabel, fmtTime, fmtDateTime } from '@/lib/format';
@@ -12,38 +12,50 @@ import { WatchHandler } from './WatchHandler';
 import { WatchBannerList } from './WatchBannerList';
 
 function dayKey(iso: string): string {
-  // ISO 의 tz offset 와 무관하게 한국시간(UTC+9) 기준 날짜
   const d = new Date(iso);
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
   return kst.toISOString().slice(0, 10);
 }
 
-
 export async function GroupDetail({
   site,
   groupKey,
-  dt,
+  eid,
   watch,
 }: {
   site: Site;
   groupKey: string;
-  dt?: string;
+  eid?: string;
   watch?: string;
 }) {
   const group = await getGroup(site, groupKey);
   if (!group) notFound();
 
-  const days = Array.from(new Set(group.entries.map((e) => dayKey(e.eventDatetime)))).sort();
-  const dtDay = dt ? dayKey(dt) : null;
-  const selectedDay = dtDay && days.includes(dtDay) ? dtDay : days[0];
-  const timesOnDay = group.entries.filter((e) => dayKey(e.eventDatetime) === selectedDay);
-  const selectedEntry = timesOnDay.find((e) => e.eventDatetime === dt) ?? timesOnDay[0];
-
-  const { snapshot, source } = await getSnapshot(site, selectedEntry.externalEventId);
+  const isMovieSite = MOVIE_SITES.includes(site);
   const isRestaurant = site === 'catchtable';
 
+  // selectedEntry: eid 일치 → 없으면 첫 entry
+  const selectedEntry = (eid && group.entries.find((e) => e.externalEventId === eid)) || group.entries[0];
+  const selDay = dayKey(selectedEntry.eventDatetime);
+  const selVenue = selectedEntry.venue;
+
+  // 날짜 list (전체)
+  const days = Array.from(new Set(group.entries.map((e) => dayKey(e.eventDatetime)))).sort();
+  // 선택 day 의 entries
+  const dayEntries = group.entries.filter((e) => dayKey(e.eventDatetime) === selDay);
+  // 선택 day 의 venue list
+  const venuesOnDay = Array.from(new Set(dayEntries.map((e) => e.venue)));
+  // 선택 day + venue 의 entries (시간)
+  const timesOnVenue = dayEntries.filter((e) => e.venue === selVenue).sort(
+    (a, b) => a.eventDatetime.localeCompare(b.eventDatetime),
+  );
+
+  const { snapshot, source } = await getSnapshot(site, selectedEntry.externalEventId);
   const contexts = await loadAllWatchContexts(site, selectedEntry.externalEventId);
   const highlighted = resolveHighlight(contexts, watch);
+
+  const enc = encodeGroupKey(groupKey);
+  const linkFor = (entryId: string) => `/${site}/g/${enc}?eid=${encodeURIComponent(entryId)}`;
 
   return (
     <div className="group-detail">
@@ -54,17 +66,19 @@ export async function GroupDetail({
             <span className="badge-text">{SITE_LABELS[site]}</span>
           </div>
           <h1>{group.title}</h1>
-          {!isRestaurant && <p className="venue">{group.venue}{group.region ? ` · ${group.region}` : ''}</p>}
+          {isMovieSite && <p className="venue">{selVenue}{selectedEntry.region ? ` · ${selectedEntry.region}` : ''}</p>}
+          {!isMovieSite && !isRestaurant && <p className="venue">{group.venue}{group.region ? ` · ${group.region}` : ''}</p>}
           {isRestaurant && <p className="venue">{group.venue}</p>}
           <p className="group-summary">
             {days.length}일 · 총 {group.entries.length}회차
+            {isMovieSite && ` · ${new Set(group.entries.map((e) => e.venue)).size}개 극장`}
             {group.category && <span className="event-category" style={{ marginLeft: 8 }}>{group.category}</span>}
           </p>
           <p className="group-quick-links">
             <Link href={`/${site}?q=${encodeURIComponent(group.title)}`}>이 {isRestaurant ? '식당' : '제목'} 다른 검색 ↗</Link>
-            {!isRestaurant && (
-              <Link href={`/${site}?q=${encodeURIComponent(group.venue)}`} style={{ marginLeft: 12 }}>
-                이 {site === 'interpark' ? '공연장' : '극장'} 다른 일정 ↗
+            {isMovieSite && (
+              <Link href={`/${site}?q=${encodeURIComponent(selVenue)}`} style={{ marginLeft: 12 }}>
+                이 극장 다른 일정 ↗
               </Link>
             )}
           </p>
@@ -79,8 +93,8 @@ export async function GroupDetail({
             return (
               <Link
                 key={d}
-                href={`/${site}/g/${encodeGroupKey(groupKey)}?dt=${encodeURIComponent(firstOnDay.eventDatetime)}`}
-                className={`day-chip ${d === selectedDay ? 'active' : ''}`}
+                href={linkFor(firstOnDay.externalEventId)}
+                className={`day-chip ${d === selDay ? 'active' : ''}`}
                 replace
               >
                 {fmtDayLabel(d + 'T00:00:00')}
@@ -89,14 +103,37 @@ export async function GroupDetail({
           })}
         </div>
 
+        {isMovieSite && venuesOnDay.length > 0 && (
+          <>
+            <h2 className="picker-label">상영관</h2>
+            <div className="venue-picker">
+              {venuesOnDay.map((v) => {
+                const firstOnVenue = dayEntries.find((e) => e.venue === v)!;
+                const timesCount = dayEntries.filter((e) => e.venue === v).length;
+                return (
+                  <Link
+                    key={v}
+                    href={linkFor(firstOnVenue.externalEventId)}
+                    className={`venue-chip ${v === selVenue ? 'active' : ''}`}
+                    replace
+                  >
+                    <span className="venue-name">{v}</span>
+                    <span className="venue-times">{timesCount}회차</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </>
+        )}
+
         {!isRestaurant && (
           <>
             <h2 className="picker-label">시간</h2>
             <div className="time-picker">
-              {timesOnDay.map((e) => (
+              {timesOnVenue.map((e) => (
                 <Link
                   key={e.externalEventId}
-                  href={`/${site}/g/${encodeGroupKey(groupKey)}?dt=${encodeURIComponent(e.eventDatetime)}`}
+                  href={linkFor(e.externalEventId)}
                   className={`time-chip ${e.externalEventId === selectedEntry.externalEventId ? 'active' : ''}`}
                   replace
                 >

@@ -36,7 +36,7 @@ export default async function WatchesPage() {
       ]);
       const eventDt = w.eventDatetime.toISOString();
       const href = groupKey
-        ? `/${w.site}/g/${encodeGroupKey(groupKey)}?dt=${encodeURIComponent(eventDt)}&watch=${w.id}`
+        ? `/${w.site}/g/${encodeGroupKey(groupKey)}?eid=${encodeURIComponent(w.externalEventId)}&watch=${w.id}`
         : `/${w.site}`;
       return {
         id: w.id,

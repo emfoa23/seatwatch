@@ -87,9 +87,7 @@ export interface EventGroup {
 }
 
 export function groupKeyOf(entry: EventIndexEntry): string {
-  if (entry.site === 'cgv' || entry.site === 'megabox' || entry.site === 'lotte') {
-    return `${entry.venue}__${entry.title}`;
-  }
+  // 모든 사이트: title 만 기준 — 영화관은 그룹 상세 안에서 venue picker 로 선택
   return entry.title;
 }
 

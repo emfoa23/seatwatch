@@ -8,9 +8,9 @@ export default async function LotteGroup({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ dt?: string; watch?: string }>;
+  searchParams: Promise<{ eid?: string; watch?: string }>;
 }) {
   const { key } = await params;
-  const { dt, watch } = await searchParams;
-  return <GroupDetail site="lotte" groupKey={decodeGroupKey(key)} dt={dt} watch={watch} />;
+  const { eid, watch } = await searchParams;
+  return <GroupDetail site="lotte" groupKey={decodeGroupKey(key)} eid={eid} watch={watch} />;
 }

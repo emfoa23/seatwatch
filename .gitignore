@@ -40,3 +40,4 @@ drizzle/meta/
 # logs
 logs/
 *.log
+.env.local.swp

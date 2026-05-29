@@ -8,9 +8,9 @@ export default async function CgvGroup({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ dt?: string; watch?: string }>;
+  searchParams: Promise<{ eid?: string; watch?: string }>;
 }) {
   const { key } = await params;
-  const { dt, watch } = await searchParams;
-  return <GroupDetail site="cgv" groupKey={decodeGroupKey(key)} dt={dt} watch={watch} />;
+  const { eid, watch } = await searchParams;
+  return <GroupDetail site="cgv" groupKey={decodeGroupKey(key)} eid={eid} watch={watch} />;
 }
