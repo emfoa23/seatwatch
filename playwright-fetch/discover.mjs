@@ -15,7 +15,13 @@ import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';
 
 const SITE = process.env.SITE || 'cgv';
-const QUERY = process.env.QUERY || '테스트';
+const QUERY = process.env.QUERY || '마이클';
+// SEARCH_URL 패턴이 있으면 진입 직후 search 페이지로 navigate 해서 traffic 캡쳐
+const SEARCH_URL_BY_SITE = {
+  cgv: (q) => `https://cgv.co.kr/tme/itgrSrch?swrd=${encodeURIComponent(q)}`,
+  lottecinema: (q) => `https://www.lottecinema.co.kr/NLCHS/Search?searchKeyword=${encodeURIComponent(q)}`,
+  megabox: (q) => `https://www.megabox.co.kr/search?content=${encodeURIComponent(q)}`,
+};
 
 const HOME_BY_SITE = {
   cgv: 'https://cgv.co.kr/',
@@ -96,6 +102,24 @@ async function main() {
     console.log('goto error:', String(e).slice(0, 200));
   }
   console.log(`[discover] after warmup: url=${page.url()} title=${(await page.title().catch(() => '?')).slice(0, 80)}`);
+
+  // SEARCH URL pattern 있으면 진입 → 발생하는 모든 fetch/XHR 캡쳐
+  const sUrlFn = SEARCH_URL_BY_SITE[SITE];
+  if (sUrlFn) {
+    const before = requests.length;
+    const url = sUrlFn(QUERY);
+    console.log(`[discover] navigate to search page: ${url}`);
+    try {
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 });
+    } catch (e) {
+      console.log('search-goto error:', String(e).slice(0, 200));
+    }
+    await page.waitForTimeout(4_000);
+    console.log(`[discover] after search-goto: ${page.url()}`);
+    const newReqs = requests.slice(before);
+    console.log(`\n[discover] requests after search-page goto (${newReqs.length}):`);
+    for (const r of newReqs) console.log(`  ${r.method} ${r.url.slice(0, 160)}`);
+  }
 
   // DOM 안 search 관련 elements 자동 발견
   const domInfo = await page.evaluate(() => {
