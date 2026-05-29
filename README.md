@@ -65,6 +65,19 @@ API:
 - 검색 캐시 1h TTL, 좌석 캐시 5m TTL (`web/lib/cache.ts`).
 - 검색 분당 30회, 좌석 분당 60회 / 유저 또는 IP.
 
+### 사이트별 endpoint 결선 현황
+
+| 사이트 | 검색 | 회차/일자 endpoint | 좌석/빈자리 |
+|---|---|---|---|
+| CGV | ✅ Playwright workflow (`searchItgrSrchAll`) | 발견됨 (cnm/atkt/* — signature 필요) | Playwright 추가 분석 |
+| Megabox | ✅ Vercel 직접 (`selectMovieList.do`) | `selectBokdList.do` 200 OK | 회차 깊이 endpoint 분석 |
+| Lotte | ✅ Vercel 직접 (`LCAPI/Home/getMovie`) | `LCWS/Ticketing/TicketingData.aspx GetPlaySequence` 200 OK | `GetSeats` 파라미터 분석 |
+| Interpark | ✅ Vercel 직접 (`contents/api/search/ticket`) | Playwright 회차 endpoint 분석 | canvas 좌석맵 Playwright |
+| CatchTable | ✅ Playwright workflow (`api/v6/search/list`) | 식당 상세 endpoint 분석 | Playwright timeslot |
+
+CGV/CatchTable 는 Cloudflare WAF 차단으로 Playwright workflow (`.github/workflows/playwright-fetch.yml`) 가 처리.
+운영: Vercel env 에 `GITHUB_DISPATCH_TOKEN` (workflow scope PAT) 추가 필요.
+
 스크립트:
 - `npm run db:push` — drizzle 마이그레이션 push
 - `npm run db:studio` — drizzle studio

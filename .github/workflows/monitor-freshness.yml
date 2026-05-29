@@ -1,8 +1,9 @@
 name: monitor-freshness
 
 # cron-job.org → workflow_dispatch (15분).
-# Valkey/Neon 신선도 + 실패율 체크. 임계 초과 시 GitHub Issue 자동 생성.
-# metrics/YYYY-MM-DD.json 누적 commit.
+# Neon 의 활성 watch_targets / notifications 건강성 체크.
+# Lazy fetch 모델로 전환 후 freshness/crawl_jobs 는 활성 watch 가 있는 경우만 의미가 있으므로 제외.
+# 임계 초과 시 GitHub Issue 자동 생성. metrics/YYYY-MM-DD.json 누적 commit.
 
 on:
   workflow_dispatch:
@@ -31,8 +32,6 @@ jobs:
 
       - name: Run monitor
         env:
-          VALKEY_URL: ${{ secrets.VALKEY_URL }}
-          VALKEY_KEY_PREFIX: ${{ secrets.VALKEY_KEY_PREFIX }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/monitor.py

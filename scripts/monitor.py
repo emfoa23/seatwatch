@@ -1,20 +1,20 @@
-"""monitor-freshness — Valkey/Neon health 체크 + 임계 초과 시 GitHub Issue 생성.
+"""monitor-freshness — lazy fetch 모델 기반 건강성 체크.
+
+Lazy fetch 로 전환 이후 운영 가정:
+  - Valkey 의 `freshness:*` / `crawl_jobs` 는 활성 watch_targets 가 cron 으로 폴링할 때만 쌓임
+  - 활성 watch_targets 가 없는 경우 freshness 도 정상적으로 비어 있음 (false positive 가드)
 
 체크 항목:
-  - Valkey freshness:<site>:<id> 30분 이상 stale
-  - crawl_jobs 직전 1시간 failed/total > 30%
-  - watch_targets last_checked_at NULL or > 30분 (active 만)
-  - notifications status='failed' 직전 1시간 비율 > 10%
+  1) 활성 watch_targets 중 last_checked_at 이 STALE_MIN 분 이상 오래된 site 수 → 알림 cron 미동작 가능성
+  2) 직전 1시간 `notifications` failure 비율 > NOTIF_FAIL_THRESHOLD → Resend 또는 worker 이상
 
-각 위반에 대해 GitHub Issue 생성 (cooldown 1시간, label 'monitor').
-
-metrics/YYYY-MM-DD.json 누적 commit.
+각 위반에 대해 GitHub Issue 1건 생성 (cooldown).
 
 Usage:
   python scripts/monitor.py
 
 Env required:
-  VALKEY_URL, VALKEY_KEY_PREFIX, DATABASE_URL, GITHUB_TOKEN, GITHUB_REPOSITORY
+  DATABASE_URL, GITHUB_TOKEN, GITHUB_REPOSITORY
 """
 from __future__ import annotations
 import json
@@ -26,11 +26,8 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
-import redis
 
 
-STALE_FRESHNESS_MIN = 30
-JOB_FAIL_THRESHOLD = 0.30
 WATCH_STALE_MIN = 30
 NOTIF_FAIL_THRESHOLD = 0.10
 ISSUE_COOLDOWN_MIN = 60
@@ -40,69 +37,11 @@ def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def get_redis() -> redis.Redis:
-    url = os.environ['VALKEY_URL']
-    return redis.Redis.from_url(url, decode_responses=True)
-
-
 def get_db() -> psycopg.Connection:
     return psycopg.connect(os.environ['DATABASE_URL'])
 
 
-PREFIX = os.environ.get('VALKEY_KEY_PREFIX', 'seatwatch:prod')
-
-
-def check_freshness(rc: redis.Redis) -> list[dict[str, Any]]:
-    """Valkey 의 freshness:* 키 timestamp 가 N분 이상 오래된 entry 추출."""
-    violations: list[dict[str, Any]] = []
-    pattern = f'{PREFIX}:freshness:*'
-    keys = list(rc.scan_iter(match=pattern, count=200))
-    for k in keys:
-        ts_raw = rc.get(k)
-        if not ts_raw:
-            continue
-        try:
-            ts = datetime.fromisoformat(ts_raw.replace('Z', '+00:00'))
-        except ValueError:
-            continue
-        age_min = (now() - ts).total_seconds() / 60
-        if age_min > STALE_FRESHNESS_MIN:
-            violations.append({
-                'kind': 'freshness_stale',
-                'key': k,
-                'age_min': round(age_min, 1),
-            })
-    return violations
-
-
-def check_crawl_jobs(conn: psycopg.Connection) -> dict[str, Any]:
-    with conn.cursor() as cur:
-        cur.execute(
-            """SELECT site,
-                      COUNT(*) FILTER (WHERE status='failed') AS failed,
-                      COUNT(*) AS total
-               FROM crawl_jobs
-               WHERE started_at > now() - interval '1 hour'
-               GROUP BY site""",
-        )
-        rows = cur.fetchall()
-    out = {'rows': [], 'violations': []}
-    for site, failed, total in rows:
-        ratio = (failed / total) if total else 0
-        out['rows'].append({'site': site, 'failed': failed, 'total': total, 'ratio': round(ratio, 2)})
-        if total > 0 and ratio > JOB_FAIL_THRESHOLD:
-            out['violations'].append({
-                'kind': 'crawl_jobs_failure_rate',
-                'site': site,
-                'ratio': round(ratio, 2),
-                'failed': failed,
-                'total': total,
-            })
-    return out
-
-
 def check_watch_stale(conn: psycopg.Connection) -> list[dict[str, Any]]:
-    # interval 은 SQL keyword 라 placeholder 못 씀. WATCH_STALE_MIN 은 상수라 inline 안전.
     sql = f"""SELECT site, COUNT(*)
               FROM watch_targets
               WHERE status='active'
@@ -168,17 +107,14 @@ def github_get(path: str) -> Any:
 def create_issue_if_needed(violations: list[dict[str, Any]]) -> str | None:
     if not violations or not os.environ.get('GITHUB_TOKEN'):
         return None
-
-    # cooldown: 최근 ISSUE_COOLDOWN_MIN 분 안에 monitor 라벨 issue 있으면 skip
     open_issues = github_get('/issues?state=open&labels=monitor&per_page=10')
     cutoff = (now() - timedelta(minutes=ISSUE_COOLDOWN_MIN)).isoformat()
     for it in open_issues:
         if it.get('created_at', '') > cutoff:
             print(f'[skip] recent monitor issue exists #{it["number"]}')
             return None
-
     title = f'[monitor] {len(violations)} alert(s) — {now().strftime("%Y-%m-%d %H:%M UTC")}'
-    body_lines = ['# monitor-freshness alerts', '']
+    body_lines = ['# monitor alerts', '']
     for v in violations:
         body_lines.append(f'- **{v.get("kind")}** — `{json.dumps({k: v[k] for k in v if k != "kind"}, ensure_ascii=False)}`')
     issue = github_post('/issues', {
@@ -190,25 +126,19 @@ def create_issue_if_needed(violations: list[dict[str, Any]]) -> str | None:
 
 
 def main() -> int:
-    rc = get_redis()
     conn = get_db()
     try:
-        fresh_v = check_freshness(rc)
-        jobs = check_crawl_jobs(conn)
         watch_v = check_watch_stale(conn)
         notif = check_notifications(conn)
 
-        all_v = [*fresh_v, *jobs['violations'], *watch_v, *notif['violations']]
+        all_v = [*watch_v, *notif['violations']]
         result = {
             'timestamp': now().isoformat(),
-            'freshness_violations': fresh_v,
-            'crawl_jobs': jobs,
             'watch_stale': watch_v,
             'notifications': notif,
             'total_violations': len(all_v),
         }
 
-        # metrics 기록
         metrics_dir = Path('metrics')
         metrics_dir.mkdir(exist_ok=True)
         fname = metrics_dir / f'{now().strftime("%Y-%m-%d")}.json'
@@ -231,7 +161,6 @@ def main() -> int:
         print(json.dumps(summary, ensure_ascii=False))
         return 0
     finally:
-        rc.close()
         conn.close()
 
 
