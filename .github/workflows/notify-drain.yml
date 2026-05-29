@@ -1,0 +1,48 @@
+name: notify-drain
+
+# 알림 큐 (Valkey notify:queue) 를 1분마다 drain.
+# Render free 가 worker/cron 미지원이라 대체 인프라.
+# Public repo 라 schedule 무제한. best-effort schedule + cron-job.org workflow_dispatch 백업.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '* * * * *'
+
+concurrency:
+  group: notify-drain
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install + build worker
+        working-directory: worker
+        run: |
+          npm ci
+          npm run build
+
+      - name: Drain queue
+        working-directory: worker
+        env:
+          NODE_ENV: production
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          VALKEY_URL: ${{ secrets.VALKEY_URL }}
+          VALKEY_KEY_PREFIX: ${{ secrets.VALKEY_KEY_PREFIX }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          PUBLIC_SITE_URL: ${{ secrets.PUBLIC_SITE_URL }}
+          NOTIFY_RUN_MODE: drain
+          NOTIFY_MAX_RUN_SEC: '90'
+        run: node dist/index.js
