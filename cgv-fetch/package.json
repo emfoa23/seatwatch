@@ -1,0 +1,13 @@
+{
+  "name": "seatwatch-cgv-fetch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "node fetch.mjs"
+  },
+  "dependencies": {
+    "ioredis": "^5.4.1",
+    "playwright": "^1.49.1"
+  }
+}

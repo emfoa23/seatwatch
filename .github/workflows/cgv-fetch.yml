@@ -1,0 +1,52 @@
+name: cgv-fetch
+
+# CGV Cloudflare WAF 우회 — Playwright 가 cgv.co.kr 페이지 로드 후 JS context 에서 직접
+# api.cgv.co.kr 호출 (signature 헤더가 페이지의 fetch interceptor 로 자동 inject).
+# 결과를 Valkey 캐시 + events index 에 적재.
+#
+# 호출 방식:
+#   1) workflow_dispatch with input `queries` (CSV)
+#   2) Vercel function 의 cgv fetcher 가 GH API 로 트리거 (server side)
+#
+# Note: GitHub Actions 시작 지연 ~30-60s 라 즉시 응답에는 부적합.
+#       lazy fetch 응답: Vercel 이 트리거 후 클라이언트가 polling.
+
+on:
+  workflow_dispatch:
+    inputs:
+      queries:
+        description: '검색어 (CSV — "마이클,어벤져스" 등)'
+        required: true
+        type: string
+
+concurrency:
+  group: cgv-fetch-${{ inputs.queries }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cgv-fetch/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cgv-fetch
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Run CGV fetch
+        working-directory: cgv-fetch
+        env:
+          VALKEY_URL: ${{ secrets.VALKEY_URL }}
+          VALKEY_KEY_PREFIX: ${{ secrets.VALKEY_KEY_PREFIX }}
+          QUERIES: ${{ inputs.queries }}
+        run: node fetch.mjs
