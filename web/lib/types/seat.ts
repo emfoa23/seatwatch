@@ -38,6 +38,7 @@ export interface SeatSnapshot {
   venue: string;
   seats?: Seat[];
   timeSlots?: TimeSlot[];
+  maxCapacity?: number;
 }
 
 export interface EventIndexEntry {

@@ -42,11 +42,11 @@ const SHOWS = [
 ];
 
 const RESTAURANTS = [
-  { name: '정식당', venue: '서울 강남구 도산대로', category: '한식' },
-  { name: '주옥', venue: '서울 강남구 청담동', category: '한식' },
-  { name: '미쉐린 가아', venue: '서울 강남구 청담동', category: '프렌치' },
-  { name: '스시 코우지', venue: '서울 용산구 한남동', category: '일식' },
-  { name: '레스토랑 알라 프리마', venue: '서울 종로구 안국동', category: '이탈리안' },
+  { name: '정식당', venue: '서울 강남구 도산대로', category: '한식', maxCapacity: 6 },
+  { name: '주옥', venue: '서울 강남구 청담동', category: '한식', maxCapacity: 4 },
+  { name: '미쉐린 가아', venue: '서울 강남구 청담동', category: '프렌치', maxCapacity: 8 },
+  { name: '스시 코우지', venue: '서울 용산구 한남동', category: '일식', maxCapacity: 4 },
+  { name: '레스토랑 알라 프리마', venue: '서울 종로구 안국동', category: '이탈리안', maxCapacity: 10 },
 ];
 
 const TIMES_MOVIE = ['10:30', '13:00', '16:00', '19:00', '21:30'];
@@ -91,10 +91,10 @@ function generateSeats(rows: number, cols: number, occupancySeed: number): Seat[
   return out;
 }
 
-function generateTimeSlots(seed: number): TimeSlot[] {
+function generateTimeSlots(seed: number, maxCapacity = 6): TimeSlot[] {
   return TIMES_RESTAURANT.map((time, i) => ({
     time,
-    partySize: [2, i % 2 === 0 ? 4 : 6] as [number, number],
+    partySize: [2, Math.min(maxCapacity, i % 2 === 0 ? 4 : 6)] as [number, number],
     available: ((i * 7 + seed) % 3) !== 0,
   }));
 }
@@ -197,7 +197,8 @@ function generateCatchtableEvents(): MovieEvent[] {
           capturedAt: new Date().toISOString(),
           title: r.name,
           venue: r.venue,
-          timeSlots: generateTimeSlots(seed),
+          maxCapacity: r.maxCapacity,
+          timeSlots: generateTimeSlots(seed, r.maxCapacity),
         },
       });
       seed += 1;

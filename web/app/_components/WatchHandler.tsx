@@ -9,13 +9,15 @@ interface Props {
   externalEventId: string;
   eventDatetime: string;
   selectorMode: 'seat' | 'time';
+  maxParty?: number;
   children: ReactNode;
 }
 
 const MAX_SEATS = 20;
 const MAX_OPT = 10;
 
-export function WatchHandler({ site, externalEventId, eventDatetime, selectorMode, children }: Props) {
+export function WatchHandler({ site, externalEventId, eventDatetime, selectorMode, maxParty, children }: Props) {
+  const partyCap = Math.min(MAX_OPT, maxParty ?? MAX_OPT);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<string[]>([]);
@@ -141,13 +143,13 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
           </label>
         ) : (
           <label className="adj-input">
-            <span>예약 인원</span>
+            <span>예약 인원 (최대 {partyCap}명)</span>
             <select
-              value={partySize}
+              value={Math.min(partySize, partyCap)}
               onChange={(e) => setPartySize(Number(e.target.value))}
               onClick={(e) => e.stopPropagation()}
             >
-              {Array.from({ length: MAX_OPT }, (_, i) => i + 1).map((n) => (
+              {Array.from({ length: partyCap }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>{n}명</option>
               ))}
             </select>

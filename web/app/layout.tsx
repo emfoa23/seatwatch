@@ -1,4 +1,5 @@
 import './globals.css';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { SiteHeader } from './_components/SiteHeader';
 
@@ -13,6 +14,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <SiteHeader />
         <main className="site-main">{children}</main>
+        <footer className="site-footer">
+          <Link href="/terms">이용약관</Link>
+          <Link href="/privacy">개인정보처리방침</Link>
+          <span className="dim small">© seatwatch — 비공식 알림 서비스</span>
+        </footer>
       </body>
     </html>
   );

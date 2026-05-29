@@ -12,6 +12,7 @@ export function TimeSlots({ snapshot, registered = [] }: { snapshot: SeatSnapsho
         <span>총 {total}개 시간대</span>
         <span className="ok">예약가능 {available}개</span>
         <span className="dim">마감 {total - available}개</span>
+        {snapshot.maxCapacity && <span className="dim">최대 {snapshot.maxCapacity}명 예약</span>}
       </div>
       <div className="timeslot-list">
         {snapshot.timeSlots.map((s) => (

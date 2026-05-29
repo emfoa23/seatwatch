@@ -130,6 +130,7 @@ export async function GroupDetail({
         externalEventId={selectedEntry.externalEventId}
         eventDatetime={snapshot.eventDatetime}
         selectorMode={isRestaurant ? 'time' : 'seat'}
+        maxParty={snapshot.maxCapacity}
       >
         {isRestaurant
           ? <TimeSlots snapshot={snapshot} registered={highlighted} />

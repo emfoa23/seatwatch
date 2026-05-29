@@ -1,8 +1,8 @@
 name: monitor-freshness
 
-# Brian/monitor-infra 패턴 답습:
-# cron-job.org → workflow_dispatch (15분마다) → Valkey/Neon 신선도 체크
-# → 임계 초과 시 GitHub Issue 자동 생성 → metrics/YYYY-MM-DD.json 커밋
+# cron-job.org → workflow_dispatch (15분).
+# Valkey/Neon 신선도 + 실패율 체크. 임계 초과 시 GitHub Issue 자동 생성.
+# metrics/YYYY-MM-DD.json 누적 commit.
 
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
       issues: write
@@ -19,12 +20,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Placeholder
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: Install deps
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run monitor
+        env:
+          VALKEY_URL: ${{ secrets.VALKEY_URL }}
+          VALKEY_KEY_PREFIX: ${{ secrets.VALKEY_KEY_PREFIX }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/monitor.py
+
+      - name: Commit metrics
         run: |
-          echo "monitor-freshness placeholder."
-          echo "구현 예정 체크 항목:"
-          echo " - Valkey freshness:<site>:<id> 30분 이상 stale"
-          echo " - 직전 1시간 crawl_jobs 실패율 > 30%"
-          echo " - watch_targets last_checked_at 10분 이상 stale"
-          echo " - Resend 발송 성공률 < 90%"
-          echo "임계 초과 시: gh issue create (label monitor, cooldown)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add metrics/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(monitor): metrics $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          else
+            echo "no metrics changes"
+          fi
