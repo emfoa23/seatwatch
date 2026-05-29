@@ -70,22 +70,39 @@ export function EventSearch({ site, placeholder }: { site: Site; placeholder: st
       setLoading(true);
       setErrorMsg(null);
       try {
-        const res = await fetch(`/api/search/${site}?q=${encodeURIComponent(trimmed)}`, {
-          signal: ctl.signal,
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setSource('error');
-          setErrorMsg(
-            res.status === 429
-              ? `요청이 너무 많습니다. ${data.retryAfter ?? 60}초 후 다시.`
-              : data.error || '검색 실패',
-          );
-          setGroups([]);
+        // Pending 일 경우 10초 간격으로 최대 90초까지 retry
+        const deadline = Date.now() + 90_000;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const res = await fetch(`/api/search/${site}?q=${encodeURIComponent(trimmed)}`, {
+            signal: ctl.signal,
+          });
+          const data = await res.json();
+          if (res.status === 202) {
+            // 처리 중 — 잠시 대기 후 retry
+            if (Date.now() >= deadline) {
+              setSource('error');
+              setErrorMsg(data.message || '데이터 수집 대기 시간 초과 — 잠시 후 다시 검색해 주세요.');
+              setGroups([]);
+              return;
+            }
+            await new Promise((r) => setTimeout(r, (data.retryAfter ?? 10) * 1000));
+            continue;
+          }
+          if (!res.ok) {
+            setSource('error');
+            setErrorMsg(
+              res.status === 429
+                ? `요청이 너무 많습니다. ${data.retryAfter ?? 60}초 후 다시.`
+                : data.error || '검색 실패',
+            );
+            setGroups([]);
+            return;
+          }
+          setSource(data.source);
+          setGroups(groupEntries(site, data.entries as EventIndexEntry[]));
           return;
         }
-        setSource(data.source);
-        setGroups(groupEntries(site, data.entries as EventIndexEntry[]));
       } catch (e) {
         if ((e as Error).name === 'AbortError') return;
         setSource('error');

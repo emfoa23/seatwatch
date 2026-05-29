@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { getCachedSearch, setCachedSearch, checkRateLimit, RateLimitError } from '@/lib/cache';
 import { getFetcher } from '@/lib/fetcher';
+import { PendingError } from '@/lib/fetcher/_dispatch';
 import { indexEvent } from '@/lib/events';
 import type { Site } from '@/lib/types/seat';
 
@@ -57,6 +58,13 @@ export async function GET(
     await setCachedSearch(site, q.data, result.entries);
     return NextResponse.json({ source: 'fetch', entries: result.entries });
   } catch (e) {
+    // PendingError → 202 + retryAfter (CGV/CatchTable workflow 가 처리 중)
+    if (e instanceof PendingError) {
+      return NextResponse.json(
+        { source: 'pending', message: e.message, entries: [], retryAfter: 10 },
+        { status: 202, headers: { 'Retry-After': '10' } },
+      );
+    }
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ source: 'error', error: msg, entries: [] }, { status: 502 });
   }
