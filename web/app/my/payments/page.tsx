@@ -2,6 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { payments } from '@/lib/db/schema';
+import { fmtDateTime } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,8 +38,8 @@ export default async function PaymentsPage() {
                 <td>{p.amountKrw.toLocaleString()}원</td>
                 <td>{p.slotsGranted}</td>
                 <td><span className={`pay-status pay-${p.status}`}>{p.status}</span></td>
-                <td>{new Date(p.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</td>
-                <td>{p.paidAt ? new Date(p.paidAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-'}</td>
+                <td>{fmtDateTime(p.createdAt)}</td>
+                <td>{p.paidAt ? fmtDateTime(p.paidAt) : '-'}</td>
               </tr>
             ))}
           </tbody>

@@ -110,7 +110,11 @@ export async function GroupDetail({
 
       <section className="snapshot-meta">
         <span className={`source source-${source}`}>{source === 'valkey' ? '실시간' : 'MOCK'}</span>
-        <span className="captured">최근 갱신: {fmtDateTime(snapshot.capturedAt)}</span>
+        {snapshot.capturedAt && !Number.isNaN(new Date(snapshot.capturedAt).getTime()) ? (
+          <span className="captured">최근 갱신: {fmtDateTime(snapshot.capturedAt)}</span>
+        ) : (
+          <span className="captured dim">갱신 정보 없음</span>
+        )}
       </section>
 
       <WatchBannerList contexts={contexts} />

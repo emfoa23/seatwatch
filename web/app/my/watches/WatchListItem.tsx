@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
 import { SiteLogo } from '@/app/_components/Icons';
+import { fmtDateTime } from '@/lib/format';
 
 interface Item {
   id: string;
@@ -79,7 +80,7 @@ export function WatchListItem({ item }: { item: Item }) {
         <div className="watch-body">
           <span className="watch-title">{item.title}</span>
           {item.venue && <span className="dim small">{item.venue}</span>}
-          <span className="dim">{new Date(item.eventDatetime).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</span>
+          <span className="dim">{fmtDateTime(item.eventDatetime)}</span>
           <span className="dim small">{describeSelector(item.seatSelector)}</span>
         </div>
       </Link>

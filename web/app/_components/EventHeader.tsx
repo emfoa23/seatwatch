@@ -1,6 +1,12 @@
 import type { SeatSnapshot } from '@/lib/types/seat';
 import { fmtDateTime } from '@/lib/format';
 
+function isValidDateInput(v: unknown): boolean {
+  if (!v) return false;
+  const d = new Date(v as string | Date);
+  return !Number.isNaN(d.getTime());
+}
+
 export function EventHeader({
   snapshot,
   source,
@@ -17,7 +23,7 @@ export function EventHeader({
     hour: '2-digit',
     minute: '2-digit',
   });
-  const captured = fmtDateTime(snapshot.capturedAt);
+  const hasCaptured = isValidDateInput(snapshot.capturedAt);
   return (
     <div className="event-header">
       <div className="event-meta">
@@ -28,7 +34,11 @@ export function EventHeader({
       </div>
       <div className="event-source">
         <span className={`source source-${source}`}>{source === 'valkey' ? '실시간' : 'MOCK'}</span>
-        <span className="captured">최근 갱신: {captured}</span>
+        {hasCaptured ? (
+          <span className="captured">최근 갱신: {fmtDateTime(snapshot.capturedAt)}</span>
+        ) : (
+          <span className="captured dim">갱신 정보 없음</span>
+        )}
       </div>
     </div>
   );

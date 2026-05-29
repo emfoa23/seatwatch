@@ -3,6 +3,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { slotInventory, watchTargets, payments, eventsMeta } from '@/lib/db/schema';
+import { fmtDateTime } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,7 +78,7 @@ export default async function MyHome() {
               <li key={w.id}>
                 <span className={`badge badge-${w.site}`}>{w.site.toUpperCase()}</span>
                 <span>{w.title}{w.venue ? ` · ${w.venue}` : ''}</span>
-                <span className="dim">{new Date(w.eventDatetime).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</span>
+                <span className="dim">{fmtDateTime(w.eventDatetime)}</span>
               </li>
             ))}
           </ul>
@@ -97,7 +98,7 @@ export default async function MyHome() {
               <li key={p.id}>
                 <span className={`pay-status pay-${p.status}`}>{p.status}</span>
                 <span>{p.amountKrw.toLocaleString()}원 · 슬롯 {p.slotsGranted}</span>
-                <span className="dim">{new Date(p.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</span>
+                <span className="dim">{fmtDateTime(p.createdAt)}</span>
               </li>
             ))}
           </ul>
