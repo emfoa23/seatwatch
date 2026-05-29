@@ -43,15 +43,20 @@ function searchKey(query) {
  */
 function parseToEntries(json /* , query */) {
   const out = [];
-  const dt = new Date(Date.now() + 9 * 3600 * 1000).toISOString().replace('Z', '+09:00');
+  function ymdToIso(ymd) {
+    if (!ymd || ymd.length < 8) {
+      return new Date(Date.now() + 9 * 3600 * 1000).toISOString().replace('Z', '+09:00');
+    }
+    return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}T19:00:00+09:00`;
+  }
   function pushMov(m) {
-    const title = m.movieNm || m.movieNmEn || m.title;
-    const idx = String(m.movieIdx || m.movieCd || m.movieNo || '').trim();
+    const title = m.movNm || m.movieNm || m.title;
+    const idx = String(m.movNo || m.movieIdx || m.movieCd || '').trim();
     if (!title || !idx) return;
     out.push({
       site: 'cgv',
       externalEventId: `cgv_${idx}`.slice(0, 16),
-      eventDatetime: dt,
+      eventDatetime: ymdToIso(m.rlsYmd),
       title,
       venue: 'CGV',
     });
@@ -59,6 +64,7 @@ function parseToEntries(json /* , query */) {
   const lists = [
     json?.data?.atktPsblMovInfo?.atktPsblMovLst,
     json?.data?.atktPsblMovTop10Lst,
+    json?.data?.movInfo?.movLst,
   ];
   for (const lst of lists) {
     if (Array.isArray(lst)) lst.forEach(pushMov);
