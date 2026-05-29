@@ -30,6 +30,8 @@ const HOME_BY_SITE = {
 const SEARCH_URL_BY_SITE = {
   cgv: (q) => `https://cgv.co.kr/tme/itgrSrch?swrd=${encodeURIComponent(q)}`,
   interpark: (q) => `https://tickets.interpark.com/contents/search?keyword=${encodeURIComponent(q)}`,
+  lottecinema: (q) =>
+    `https://www.lottecinema.co.kr/NLCHS/Movie/MovieSearchResult?keyword=${encodeURIComponent(q)}`,
 };
 
 const home = HOME_BY_SITE[SITE];
@@ -275,6 +277,58 @@ async function main() {
       /* try next */
     }
   }
+
+  // ============ PHASE 5: 날짜 + 시간 + 좌석 click (좌석맵 endpoint 캡쳐) ============
+  markPhase('seat');
+  // 날짜 chip 클릭
+  const dateCandidates = [
+    'button[class*="date" i]:not([disabled])',
+    'a[class*="date" i]',
+    '[class*="DateBtn" i]',
+    'li[class*="date" i] button',
+    '.date-list li',
+    '[role="tab"][class*="date" i]',
+  ];
+  let dateClicked = false;
+  for (const sel of dateCandidates) {
+    try {
+      const els = page.locator(sel);
+      const n = await els.count();
+      if (n) {
+        await els.first().click({ timeout: 2_000 });
+        console.log(`  clicked date via: ${sel} (count=${n})`);
+        await page.waitForTimeout(2_500);
+        dateClicked = true;
+        break;
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  // 시간/회차 chip 클릭
+  const timeCandidates = [
+    'button[class*="time" i]:not([disabled])',
+    '[class*="TimeBtn" i]',
+    'button[class*="schedule" i]',
+    'a[class*="time" i]',
+    '[class*="time-item" i]',
+  ];
+  for (const sel of timeCandidates) {
+    try {
+      const els = page.locator(sel);
+      const n = await els.count();
+      if (n) {
+        await els.first().click({ timeout: 2_000 });
+        console.log(`  clicked time via: ${sel} (count=${n})`);
+        await page.waitForTimeout(4_000);
+        break;
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  console.log(`  seat-phase url: ${page.url()}`);
+  await page.screenshot({ path: `discover-${SITE}-5-seat.png` }).catch(() => null);
 
   // 모든 dump → JSON
   const out = {
