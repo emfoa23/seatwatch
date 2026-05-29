@@ -58,9 +58,11 @@ function parseToEntries(json, query) {
 }
 
 async function searchOne(page, query) {
-  // Strategy: 메인 페이지의 검색 input 에 키워드 입력 후 Enter
-  //   → CGV SPA 가 자체 검색 fire → fetch interceptor 가 signature inject
-  //   → waitForResponse 로 itgrSrch endpoint 응답 캡쳐
+  // CGV 의 진짜 검색 URL: /tme/itgrSrch?swrd=<keyword>
+  //   → SPA 가 자체적으로 api.cgv.co.kr/tme/more/itgrSrch/searchItgrSrchMov 호출
+  //   → waitForResponse 로 그 응답 캡쳐 (signature 자동 inject)
+  const searchUrl = `https://cgv.co.kr/tme/itgrSrch?swrd=${encodeURIComponent(query)}`;
+  console.log(`  goto ${searchUrl}`);
   const respPromise = page
     .waitForResponse(
       (r) => r.url().includes('/tme/more/itgrSrch/searchItgrSrchMov'),
@@ -68,52 +70,11 @@ async function searchOne(page, query) {
     )
     .catch((e) => ({ _error: String(e) }));
 
-  // 일반적인 검색 input 셀렉터 후보들 (CGV SPA 변경에 robust 하게)
-  const candidates = [
-    'input[type="search"]',
-    'input[placeholder*="검색"]',
-    'input[name*="search" i]',
-    'input[name*="keyword" i]',
-    '[role="search"] input',
-    'header input',
-  ];
-
-  let filled = false;
-  for (const sel of candidates) {
-    try {
-      const el = await page.waitForSelector(sel, { timeout: 3_000, state: 'visible' });
-      if (el) {
-        await el.click({ clickCount: 3 }).catch(() => null);
-        await el.fill(query);
-        await page.keyboard.press('Enter');
-        console.log(`  filled via selector: ${sel}`);
-        filled = true;
-        break;
-      }
-    } catch {
-      /* try next */
-    }
-  }
-  if (!filled) {
-    console.log('  no search input found — fallback to direct page.evaluate fetch');
-    // page context 안 fetch — CGV 의 fetch interceptor 가 page-wide 라면 작동
-    const url = `${TARGET_URL_BASE}?coCd=${COCD}&swrd=${encodeURIComponent(query)}&lmtSrchYn=N`;
-    const result = await page.evaluate(async (u) => {
-      try {
-        const r = await fetch(u, { headers: { accept: 'application/json' }, credentials: 'include' });
-        const text = await r.text();
-        let body;
-        try { body = JSON.parse(text); } catch { body = { rawText: text.slice(0, 800) }; }
-        return { ok: r.ok, status: r.status, body };
-      } catch (e) {
-        return { ok: false, status: 0, error: String(e) };
-      }
-    }, url);
-    return result;
-  }
+  await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  console.log(`  after goto: url=${page.url()} title=${(await page.title().catch(() => '?')).slice(0, 80)}`);
 
   const resp = await respPromise;
-  await page.screenshot({ path: `search-${Date.now()}.png` }).catch(() => null);
+  await page.screenshot({ path: `cgv-search-${Date.now()}.png` }).catch(() => null);
   if (resp && resp._error) return { ok: false, status: 0, error: resp._error };
   if (!resp) return { ok: false, status: 0, error: 'no response captured' };
   try {
