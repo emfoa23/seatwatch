@@ -5,11 +5,6 @@ import { SiteLogo } from './Icons';
 
 import { fmtShortDateTime as fmt } from '@/lib/format';
 
-function uniqueDates(entries: { eventDatetime: string }[]): number {
-  const set = new Set(entries.map((e) => e.eventDatetime.slice(0, 10)));
-  return set.size;
-}
-
 export async function EventSearch({
   site,
   filters,
@@ -74,7 +69,6 @@ export async function EventSearch({
       ) : (
         <ul className="event-list">
           {groups.map((g) => {
-            const dateCount = uniqueDates(g.entries);
             const next = g.entries[0];
             const isRestaurant = site === 'catchtable';
             return (
@@ -86,10 +80,6 @@ export async function EventSearch({
                     {isRestaurant && <span className="event-venue">{g.venue}</span>}
                     <span className="event-datetime">
                       가장 빠른 일정: {fmt(next.eventDatetime)}
-                    </span>
-                    <span className="event-meta">
-                      {dateCount}일 · {g.entries.length}회차
-                      {g.category && <span className="event-category">{g.category}</span>}
                     </span>
                   </div>
                 </Link>

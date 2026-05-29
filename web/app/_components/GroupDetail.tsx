@@ -67,11 +67,6 @@ export async function GroupDetail({
           <h1>{group.title}</h1>
           {!isRestaurant && <p className="venue">{group.venue}{group.region ? ` · ${group.region}` : ''}</p>}
           {isRestaurant && <p className="venue">{group.venue}</p>}
-          <p className="group-summary">
-            {days.length}일 · 총 {group.entries.length}회차
-            {isMovieSite && screens.length > 0 && ` · ${new Set(group.entries.map((e) => e.screen ?? '')).size}개 상영관`}
-            {group.category && <span className="event-category" style={{ marginLeft: 8 }}>{group.category}</span>}
-          </p>
           <p className="group-quick-links">
             <Link href={`/${site}?q=${encodeURIComponent(group.title)}`}>이 {isRestaurant ? '식당' : '제목'} 다른 검색 ↗</Link>
             {!isRestaurant && (
@@ -107,7 +102,6 @@ export async function GroupDetail({
             <div className="venue-picker">
               {screens.map((sc) => {
                 const firstOnScreen = dayEntries.find((e) => (e.screen ?? '') === sc)!;
-                const timesCount = dayEntries.filter((e) => (e.screen ?? '') === sc).length;
                 return (
                   <Link
                     key={sc || '_none'}
@@ -116,7 +110,6 @@ export async function GroupDetail({
                     replace
                   >
                     <span className="venue-name">{sc || '본관'}</span>
-                    <span className="venue-times">{timesCount}회차</span>
                   </Link>
                 );
               })}
