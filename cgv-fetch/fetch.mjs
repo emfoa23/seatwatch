@@ -67,7 +67,9 @@ async function searchOne(page, query) {
     { timeout: 15_000 },
   ).catch((e) => ({ _error: String(e) }));
 
-  await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await page.goto(searchUrl, { waitUntil: 'networkidle', timeout: 30_000 });
+  console.log(`  after search goto: url=${page.url()} title=${(await page.title().catch(() => '?')).slice(0, 80)}`);
+  await page.screenshot({ path: `search-${Date.now()}.png` }).catch(() => null);
 
   const resp = await respPromise;
   if (resp && resp._error) {
@@ -116,17 +118,25 @@ async function main() {
   });
 
   const page = await ctx.newPage();
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') console.log('  [page.console.error]', msg.text().slice(0, 200));
+  });
+  page.on('requestfailed', (req) => {
+    if (req.url().includes('cgv.co.kr')) {
+      console.log('  [requestfailed]', req.url(), req.failure()?.errorText);
+    }
+  });
   console.log('[cgv-fetch] visiting cgv.co.kr to warm Cloudflare bot challenge…');
   try {
     await page.goto('https://cgv.co.kr/', {
-      waitUntil: 'domcontentloaded',
+      waitUntil: 'networkidle',
       timeout: 30_000,
     });
   } catch (e) {
-    console.log('[cgv-fetch] initial goto error (continuing):', String(e).slice(0, 120));
+    console.log('[cgv-fetch] initial goto error (continuing):', String(e).slice(0, 200));
   }
-  // Cloudflare 5초 challenge 가 있으면 통과 대기
-  await page.waitForTimeout(5_000);
+  console.log(`[cgv-fetch] after warmup: url=${page.url()} title=${(await page.title().catch(() => '?')).slice(0, 80)}`);
+  await page.screenshot({ path: 'warmup.png', fullPage: false }).catch(() => null);
 
   const redis = new Redis(VALKEY_URL, {
     tls: VALKEY_URL.startsWith('rediss://') ? {} : undefined,

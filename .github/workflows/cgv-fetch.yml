@@ -50,3 +50,12 @@ jobs:
           VALKEY_KEY_PREFIX: ${{ secrets.VALKEY_KEY_PREFIX }}
           QUERIES: ${{ inputs.queries }}
         run: node fetch.mjs
+
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cgv-screenshots
+          path: cgv-fetch/*.png
+          if-no-files-found: ignore
+          retention-days: 3
