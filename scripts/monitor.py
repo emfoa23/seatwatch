@@ -102,15 +102,14 @@ def check_crawl_jobs(conn: psycopg.Connection) -> dict[str, Any]:
 
 
 def check_watch_stale(conn: psycopg.Connection) -> list[dict[str, Any]]:
+    # interval 은 SQL keyword 라 placeholder 못 씀. WATCH_STALE_MIN 은 상수라 inline 안전.
+    sql = f"""SELECT site, COUNT(*)
+              FROM watch_targets
+              WHERE status='active'
+                AND (last_checked_at IS NULL OR last_checked_at < now() - interval '{int(WATCH_STALE_MIN)} minutes')
+              GROUP BY site"""
     with conn.cursor() as cur:
-        cur.execute(
-            """SELECT site, COUNT(*)
-               FROM watch_targets
-               WHERE status='active'
-                 AND (last_checked_at IS NULL OR last_checked_at < now() - interval %s)
-               GROUP BY site""",
-            (f'{WATCH_STALE_MIN} minutes',),
-        )
+        cur.execute(sql)
         rows = cur.fetchall()
     return [{'kind': 'watch_stale', 'site': s, 'count': c} for s, c in rows if c > 0]
 
