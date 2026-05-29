@@ -1,6 +1,6 @@
 # seatwatch
 
-CGV·인터파크 티켓·캐치테이블의 좌석/시간대 예약 현황을 한 UI 에서 조회하고, 마감된 자리에 빈자리가 나오면 메일로 알림 받는 서비스.
+CGV · 메가박스 · 롯데시네마 · 인터파크 티켓 · 캐치테이블의 좌석/시간대 예약 현황을 한 UI 에서 조회하고, 마감된 자리에 빈자리가 나오면 메일로 알림 받는 서비스.
 
 설계 문서 (Personal/.claude/plans/): `vectorized-floating-parnas.md`
 
@@ -8,8 +8,9 @@ CGV·인터파크 티켓·캐치테이블의 좌석/시간대 예약 현황을 �
 
 - `web/` — Next.js (App Router). Vercel 배포.
 - `web/scripts/seed-mock.ts` — Mock 데이터 5사 적재 (`npm run seed`).
-- `worker/` — Node.js 알림 큐 consumer. Render Background Worker.
-- `.github/workflows/` — CI + 신선도 모니터링.
+- `worker/` — Node.js 알림 큐 consumer. GitHub Actions `notify-drain` 가 매 분 build + drain.
+- `scripts/monitor.py` — Valkey/Neon health 모니터링 (cron-job.org → workflow_dispatch).
+- `.github/workflows/` — CI · notify-drain · monitor-freshness.
 
 크롤러는 별도 repo: [emfoa23/seatwatch-crawler](https://github.com/emfoa23/seatwatch-crawler) (public, GitHub Actions 무제한 사용).
 
@@ -19,48 +20,27 @@ CGV·인터파크 티켓·캐치테이블의 좌석/시간대 예약 현황을 �
 |---|---|
 | FE | Next.js + React (App Router) |
 | 인증 | Auth.js v5 (Google/Kakao/Naver OAuth + Credentials) |
-| 영속 DB | Neon (Postgres) |
-| 좌석 캐시 / 큐 | Aiven Valkey (prefix `seatwatch:prod:`) |
+| 영속 DB | Neon (Postgres) — 1 인스턴스 |
+| 좌석 캐시 / 큐 | Aiven Valkey — 1 인스턴스, `VALKEY_KEY_PREFIX` 로 phase 격리 |
 | 결제 | 토스페이먼츠 |
 | 메일 | Resend |
-| 호스팅 | Vercel (web) + Render (worker) |
-| Cron | cron-job.org → GitHub Actions `workflow_dispatch` |
+| 호스팅 (web) | Vercel |
+| Worker (알림 큐 drain) | GitHub Actions `notify-drain.yml` (매 분 schedule + cron-job.org workflow_dispatch) |
+| 크롤러 | GitHub Actions (seatwatch-crawler repo) |
 
-## 외부 서비스 발급 체크리스트
+## Phase 정책
 
-본격 구현 전에 아래 키들을 발급받아 환경변수에 등록. `.env.example` 참고.
+Aiven Valkey 1통 + Neon Postgres 1통을 모든 환경이 공유. 격리는 **prefix** 와 **운영 룰** 로:
 
-1. **Neon** — [neon.tech](https://neon.tech) → Create Project (region: AWS ap-southeast-1 Singapore). Branch 2개: `main` (prod) + `dev`. → `DATABASE_URL`
-2. **Resend** — [resend.com](https://resend.com) → API Keys. → `RESEND_API_KEY`. 초기엔 `onboarding@resend.dev` 발신.
-3. **Google OAuth** — [console.cloud.google.com](https://console.cloud.google.com) → OAuth client ID (Web). Redirect: `https://<도메인>/api/auth/callback/google` + `http://localhost:3000/api/auth/callback/google`
-4. **Kakao OAuth** — [developers.kakao.com](https://developers.kakao.com) → 카카오 로그인 활성화 + client_secret 발급
-5. **Naver OAuth** — [developers.naver.com](https://developers.naver.com) → 애플리케이션 등록. 검수 전엔 본인+테스트 5명 한도.
-6. **토스페이먼츠** — [tosspayments.com](https://tosspayments.com) → 가입 → "개인 비사업자". 테스트 키로 전체 플로우 가능.
-7. **cron-job.org** — [cron-job.org](https://cron-job.org) → 무료 가입. 4-5개 job 등록 (다음 세션에 안내).
-8. **GitHub PAT** — Settings → Developer settings → Tokens (classic, `workflow` scope). cron-job.org Authorization 헤더용.
-9. **Aiven Valkey** — 기존 인스턴스 재사용. prefix `seatwatch:prod:` 로 격리.
+| 환경 | DATABASE_URL | VALKEY_KEY_PREFIX | 비고 |
+|---|---|---|---|
+| **로컬 dev** (localhost:3000) | 같은 Neon | `seatwatch:dev` | 캐시 격리 |
+| **Vercel Production** | 같은 Neon | `seatwatch:prod` | 운영 — 실사용자 데이터 |
+| **GitHub Actions** (crawler · notify · monitor) | 같은 Neon | `seatwatch:prod` | 항상 prod prefix |
 
-## 환경변수
-
-`.env.example` 참고. 분류:
-- **Vercel (web)**: DATABASE_URL, VALKEY_URL, NEXTAUTH_*, OAuth 4종, TOSS_*, RESEND_*
-- **Render (worker)**: DATABASE_URL, VALKEY_URL, RESEND_API_KEY
-- **GitHub Secrets (crawler repo)**: DATABASE_URL, VALKEY_URL, CRAWLER_USER_AGENT_POOL
-
-`VALKEY_KEY_PREFIX=seatwatch:prod` (dev 는 `seatwatch:dev`) — 키 prefix 강제 wrap.
-
-## 법적 / 운영 리스크
-
-이 서비스는 외부 사이트(CGV·인터파크·캐치테이블)의 공개 정보를 정기 조회. 각 사이트 ToS 가 "자동화된 수단 접근 금지" 일반 조항을 포함하고 있어 **IP 차단·계정 차단·법적 분쟁** 위험이 있음. 운영 시 모니터링·SLA 운영 메모 별도.
+자세한 정책은 `PHASES.md` 참조.
 
 ## 로컬 개발
-
-### 사전 준비
-
-1. `.env.local` 을 repo root 에 두고 키를 채움 (`.env.example` 참고).
-2. `web/.env.local` 은 root 의 symlink (`ln -s ../.env.local web/.env.local`).
-
-### 실행
 
 ```bash
 cd web
@@ -69,49 +49,42 @@ npm run db:push          # Neon 에 스키마 적용 (최초 1회)
 npm run dev              # http://localhost:3000
 ```
 
+`.env.local` 은 repo root + `web/` 의 symlink. `web/.env.local` 만들 때 `ln -s ../.env.local web/.env.local`.
+
 주요 페이지:
 - `/` — 홈
-- `/cgv/<id>` · `/interpark/<id>` · `/catchtable/<id>` — 좌석 조회 (Valkey snapshot, 없으면 mock fallback)
-- `/login` · `/signup` — 인증 (Google · Kakao · Naver OAuth + 자체 가입)
-- `/my/watches` — 내 알림 (로그인 필요)
+- `/cgv` · `/megabox` · `/lotte` · `/interpark` · `/catchtable` — 검색
+- `/<site>/g/<groupKey>` — 그룹 상세 (날짜·시간 picker, 좌석맵, 알림 등록)
+- `/login` · `/signup` — 인증
+- `/my` · `/my/watches` · `/my/billing` · `/my/payments` · `/my/profile` — 마이페이지
 
 스크립트:
 - `npm run db:push` — drizzle 마이그레이션 push
 - `npm run db:studio` — drizzle studio
 - `npm run typecheck` — TS 검증
+- `npm run seed` — Mock 데이터 210 events 적재
 
-### 데이터 흐름
+## 데이터 흐름
 
 ```
-[crawler]  →  Valkey snapshot:<site>:<id>:<dt>  →  [web SSR]  →  브라우저
+[crawler GitHub Actions]  →  Valkey snapshot:<site>:<id>:<dt>  →  [Vercel SSR]  →  브라우저
                     ↓
               Neon seat_events + crawl_jobs
                     ↓
          빈자리 발생 시 Valkey notify:queue
                     ↓
-              [Render Worker] (다음 PR)
+       [GitHub Actions notify-drain (매 분)]
                     ↓
-                  Resend
+                  Resend → 사용자 메일
 ```
 
-## 구현 진척 (2026-05-28)
+## 배포
 
-- [x] Repo 셋업 + skeleton
-- [x] Neon DB 스키마 (9 테이블, 22 인덱스)
-- [x] Auth.js v5: Google · Kakao · Naver OAuth + Credentials
-- [x] 헤더 로그인/로그아웃 토글, 홈 placeholder
-- [x] 5사 검색 인덱스 (CGV · 메가박스 · 롯데시네마 · 인터파크 · 캐치테이블)
-- [x] 5사 상세 페이지 (좌석맵/시간슬롯, Valkey snapshot SSR)
-- [x] Mock seed 스크립트 (210 events: 60+60+60+15+15)
-- [x] 좌석/시간 클릭 → 알림 등록 UX (비로그인 시 /login redirect, 슬롯 검증)
-- [x] POST/DELETE /api/watch (zod 검증, 슬롯 부족 시 409)
-- [x] 알림 워커 + Resend 발송 (cooldown SETNX, dedupe DB UNIQUE)
-- [x] CGV crawler MVP (mock fallback)
-- [x] 토스페이먼츠 결제 API 개별 연동 (카드 · 토스페이 · 계좌이체 · 가상계좌)
-- [x] /my/watches 알림 취소 UI
-- [ ] 인터파크 (Playwright) · 캐치테이블 crawler 실제 endpoint
-- [ ] monitor-freshness workflow 실 구현
-- [ ] Vercel · Render 배포
+`DEPLOYMENT.md` 참고. Vercel 자동 배포 + GitHub Actions secrets 등록만 하면 끝.
+
+## 법적 / 운영 리스크
+
+외부 사이트(CGV·메가박스·롯데시네마·인터파크·캐치테이블)의 공개 정보를 정기 조회. 각 사이트 ToS 가 "자동화된 수단 접근 금지" 일반 조항을 포함하고 있어 **IP 차단·계정 차단·법적 분쟁** 위험이 있음.
 
 ## 개발 룰
 
