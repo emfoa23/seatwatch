@@ -1,4 +1,5 @@
 import type { SeatSnapshot } from '@/lib/types/seat';
+import { fmtDateTime } from '@/lib/format';
 
 export function EventHeader({
   snapshot,
@@ -8,6 +9,7 @@ export function EventHeader({
   source: 'valkey' | 'mock';
 }) {
   const dt = new Date(snapshot.eventDatetime).toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -15,7 +17,7 @@ export function EventHeader({
     hour: '2-digit',
     minute: '2-digit',
   });
-  const captured = new Date(snapshot.capturedAt).toLocaleString('ko-KR');
+  const captured = fmtDateTime(snapshot.capturedAt);
   return (
     <div className="event-header">
       <div className="event-meta">

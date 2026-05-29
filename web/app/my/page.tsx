@@ -77,7 +77,7 @@ export default async function MyHome() {
               <li key={w.id}>
                 <span className={`badge badge-${w.site}`}>{w.site.toUpperCase()}</span>
                 <span>{w.title}{w.venue ? ` · ${w.venue}` : ''}</span>
-                <span className="dim">{new Date(w.eventDatetime).toLocaleString('ko-KR')}</span>
+                <span className="dim">{new Date(w.eventDatetime).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</span>
               </li>
             ))}
           </ul>
@@ -97,7 +97,7 @@ export default async function MyHome() {
               <li key={p.id}>
                 <span className={`pay-status pay-${p.status}`}>{p.status}</span>
                 <span>{p.amountKrw.toLocaleString()}원 · 슬롯 {p.slotsGranted}</span>
-                <span className="dim">{new Date(p.createdAt).toLocaleString('ko-KR')}</span>
+                <span className="dim">{new Date(p.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</span>
               </li>
             ))}
           </ul>

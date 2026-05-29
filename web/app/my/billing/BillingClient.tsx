@@ -128,7 +128,7 @@ export function BillingClient({ free, paid, pricePerSlot, email, recent }: Props
                   <td>{p.amount.toLocaleString()}원</td>
                   <td>{p.slotsGranted}</td>
                   <td><span className={`pay-status pay-${p.status}`}>{p.status}</span></td>
-                  <td>{new Date(p.paidAt ?? p.createdAt).toLocaleString('ko-KR')}</td>
+                  <td>{new Date(p.paidAt ?? p.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</td>
                 </tr>
               ))}
             </tbody>

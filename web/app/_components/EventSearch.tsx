@@ -3,15 +3,7 @@ import { listGroups, encodeGroupKey, type EventFilters } from '@/lib/events';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
 import { SiteLogo } from './Icons';
 
-function fmt(iso: string): string {
-  return new Date(iso).toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+import { fmtShortDateTime as fmt } from '@/lib/format';
 
 function uniqueDates(entries: { eventDatetime: string }[]): number {
   const set = new Set(entries.map((e) => e.eventDatetime.slice(0, 10)));

@@ -57,7 +57,7 @@ async function sendMail(p: NotifyPayload): Promise<{ ok: boolean; status: number
     <h2>찾던 자리에 빈자리가 생겼습니다</h2>
     <p>사이트: <b>${p.site.toUpperCase()}</b></p>
     <p>이벤트 ID: <code>${p.event_id}</code></p>
-    <p>일시: ${new Date(p.event_datetime).toLocaleString('ko-KR')}</p>
+    <p>일시: ${new Date(p.event_datetime).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</p>
     <p>좌석: <code>${seatStr}</code></p>
     <p><a href="${detailUrl}">바로 확인</a></p>
     <hr>
@@ -107,15 +107,37 @@ async function processOne(payload: NotifyPayload): Promise<'sent' | 'deduped' | 
   return 'failed';
 }
 
+const RUN_MODE = process.env.NOTIFY_RUN_MODE === 'drain' ? 'drain' : 'long';
+const MAX_RUN_SEC = Number(process.env.NOTIFY_MAX_RUN_SEC ?? 50);
+
 async function loop(): Promise<void> {
-  console.log(`worker started. queue=${PREFIX}:${QUEUE}`);
+  console.log(`worker started. queue=${PREFIX}:${QUEUE} mode=${RUN_MODE}`);
+  const deadline = Date.now() + MAX_RUN_SEC * 1000;
+  let processed = 0;
+
   while (true) {
     try {
-      const popped = await redis.brpop(QUEUE, 5);
-      if (!popped) continue;
+      // drain 모드: 짧은 timeout, 빈 결과면 종료. 매 분 cron 으로 실행하므로 알림이 1분 안에 처리됨.
+      // long 모드: 5초 BRPOP, 무한 루프 (worker plan 운영 시).
+      const timeout = RUN_MODE === 'drain' ? 1 : 5;
+      const popped = await redis.brpop(QUEUE, timeout);
+      if (!popped) {
+        if (RUN_MODE === 'drain') {
+          console.log(`drain done. processed=${processed}`);
+          await redis.quit();
+          process.exit(0);
+        }
+        continue;
+      }
       const [, raw] = popped;
       const payload = JSON.parse(raw) as NotifyPayload;
       await processOne(payload);
+      processed++;
+      if (RUN_MODE === 'drain' && Date.now() > deadline) {
+        console.log(`drain timeout. processed=${processed}`);
+        await redis.quit();
+        process.exit(0);
+      }
     } catch (e) {
       console.error('loop error:', e);
       await new Promise((r) => setTimeout(r, 1000));

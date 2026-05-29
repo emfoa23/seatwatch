@@ -5,6 +5,7 @@ import { getSnapshot } from '@/lib/snapshot';
 import { SITE_LABELS, type Site } from '@/lib/types/seat';
 import { loadAllWatchContexts, resolveHighlight } from '@/lib/watch-context';
 import { SiteLogo } from './Icons';
+import { fmtDayLabel, fmtTime, fmtDateTime } from '@/lib/format';
 import { SeatMap } from './SeatMap';
 import { TimeSlots } from './TimeSlots';
 import { WatchHandler } from './WatchHandler';
@@ -17,17 +18,6 @@ function dayKey(iso: string): string {
   return kst.toISOString().slice(0, 10);
 }
 
-function fmtDayLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    weekday: 'short',
-  });
-}
-
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-}
 
 export async function GroupDetail({
   site,
@@ -120,7 +110,7 @@ export async function GroupDetail({
 
       <section className="snapshot-meta">
         <span className={`source source-${source}`}>{source === 'valkey' ? '실시간' : 'MOCK'}</span>
-        <span className="captured">최근 갱신: {new Date(snapshot.capturedAt).toLocaleString('ko-KR')}</span>
+        <span className="captured">최근 갱신: {fmtDateTime(snapshot.capturedAt)}</span>
       </section>
 
       <WatchBannerList contexts={contexts} />

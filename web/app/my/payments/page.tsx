@@ -37,8 +37,8 @@ export default async function PaymentsPage() {
                 <td>{p.amountKrw.toLocaleString()}원</td>
                 <td>{p.slotsGranted}</td>
                 <td><span className={`pay-status pay-${p.status}`}>{p.status}</span></td>
-                <td>{new Date(p.createdAt).toLocaleString('ko-KR')}</td>
-                <td>{p.paidAt ? new Date(p.paidAt).toLocaleString('ko-KR') : '-'}</td>
+                <td>{new Date(p.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</td>
+                <td>{p.paidAt ? new Date(p.paidAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-'}</td>
               </tr>
             ))}
           </tbody>

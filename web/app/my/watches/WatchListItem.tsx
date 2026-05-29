@@ -79,7 +79,7 @@ export function WatchListItem({ item }: { item: Item }) {
         <div className="watch-body">
           <span className="watch-title">{item.title}</span>
           {item.venue && <span className="dim small">{item.venue}</span>}
-          <span className="dim">{new Date(item.eventDatetime).toLocaleString('ko-KR')}</span>
+          <span className="dim">{new Date(item.eventDatetime).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</span>
           <span className="dim small">{describeSelector(item.seatSelector)}</span>
         </div>
       </Link>
