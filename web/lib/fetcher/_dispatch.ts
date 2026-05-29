@@ -12,8 +12,8 @@
  *   GITHUB_OWNER, GITHUB_REPO, GITHUB_DISPATCH_TOKEN (workflow scope PAT)
  */
 import { valkey } from '@/lib/valkey';
-import { getCachedSearch } from '@/lib/cache';
-import type { EventIndexEntry, Site } from '@/lib/types/seat';
+import { getCachedSearch, getCachedSnapshot } from '@/lib/cache';
+import type { EventIndexEntry, SeatSnapshot, Site } from '@/lib/types/seat';
 
 export class PendingError extends Error {
   constructor(message = 'pending') {
@@ -27,7 +27,7 @@ const REPO = process.env.GITHUB_REPO ?? 'seatwatch';
 const TOKEN = process.env.GITHUB_DISPATCH_TOKEN;
 const WORKFLOW_FILE = 'playwright-fetch.yml';
 
-async function triggerWorkflow(site: Site, query: string): Promise<void> {
+async function triggerWorkflow(site: Site | string, query: string): Promise<void> {
   if (!TOKEN) {
     throw new Error('GITHUB_DISPATCH_TOKEN 미설정 — Vercel env 에 PAT 등록 필요');
   }
@@ -87,5 +87,41 @@ export async function dispatchAndWait(
   }
   throw new PendingError(
     `데이터 수집 중 — 잠시 후 다시 검색해 주세요 (${site}/${query})`,
+  );
+}
+
+/**
+ * Snapshot 용 dispatch — workflow 가 (예: catchtable-snapshot) shopRef 받아 timeslot 적재.
+ * lock 은 (workflowSite, externalEventId) 단위. 캐시 hit 까지 polling.
+ */
+export async function dispatchSnapshot(
+  workflowSite: string,
+  externalEventId: string,
+  eventDatetime: string,
+  opts: { holdoff?: number; pollMs?: number; maxWaitMs?: number; cacheSite?: Site } = {},
+): Promise<SeatSnapshot> {
+  const holdoff = opts.holdoff ?? 300;
+  const pollMs = opts.pollMs ?? 2_000;
+  const maxWaitMs = opts.maxWaitMs ?? 25_000;
+  const cacheSite = opts.cacheSite ?? 'catchtable';
+
+  const lockKey = `dispatch:${workflowSite}:${externalEventId}`;
+  const acquired = await valkey.set(lockKey, '1', 'EX', holdoff, 'NX');
+  if (acquired === 'OK') {
+    try {
+      await triggerWorkflow(workflowSite, externalEventId);
+    } catch (e) {
+      await valkey.del(lockKey);
+      throw e;
+    }
+  }
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, pollMs));
+    const cached = await getCachedSnapshot(cacheSite, externalEventId, eventDatetime);
+    if (cached) return cached;
+  }
+  throw new PendingError(
+    `좌석/타임슬롯 수집 중 — 잠시 후 다시 시도 (${workflowSite}/${externalEventId})`,
   );
 }

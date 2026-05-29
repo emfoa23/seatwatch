@@ -18,6 +18,7 @@ on:
         options:
           - cgv
           - catchtable
+          - catchtable-snapshot
           - discover
           - cgv-seat
           - megabox-seat
@@ -25,7 +26,7 @@ on:
           - interpark-seat
           - catchtable-seat
       queries:
-        description: '검색어 (CSV) 또는 discover 시 "site:query"'
+        description: '검색어 (CSV), discover 시 "site:query", catchtable-snapshot 시 SHOP_REFS CSV'
         required: true
         type: string
 
@@ -64,6 +65,9 @@ jobs:
               IFS=':' read -r sub_site sub_query <<< "${{ inputs.queries }}"
               echo "discover site=$sub_site query=$sub_query"
               SITE="$sub_site" QUERY="$sub_query" node discover.mjs
+              ;;
+            catchtable-snapshot)
+              SHOP_REFS='${{ inputs.queries }}' node catchtable-snapshot.mjs
               ;;
             *-seat)
               QUERY='${{ inputs.queries }}' node ${{ inputs.site }}.mjs

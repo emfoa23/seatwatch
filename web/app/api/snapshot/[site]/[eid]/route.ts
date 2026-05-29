@@ -7,6 +7,7 @@ import {
   RateLimitError,
 } from '@/lib/cache';
 import { getFetcher } from '@/lib/fetcher';
+import { PendingError } from '@/lib/fetcher/_dispatch';
 import { getEventIndexEntry } from '@/lib/events';
 import type { Site } from '@/lib/types/seat';
 
@@ -59,6 +60,12 @@ export async function GET(
     await setCachedSnapshot(snap);
     return NextResponse.json({ source: 'fetch', snapshot: snap });
   } catch (e) {
+    if (e instanceof PendingError) {
+      return NextResponse.json(
+        { source: 'pending', message: e.message, retryAfter: 10 },
+        { status: 202, headers: { 'Retry-After': '10' } },
+      );
+    }
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ source: 'error', error: msg }, { status: 502 });
   }
