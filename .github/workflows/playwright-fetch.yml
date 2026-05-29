@@ -19,6 +19,7 @@ on:
           - cgv
           - catchtable
           - catchtable-snapshot
+          - cgv-snapshot
           - discover
           - cgv-seat
           - megabox-seat
@@ -68,6 +69,11 @@ jobs:
               ;;
             catchtable-snapshot)
               SHOP_REFS='${{ inputs.queries }}' node catchtable-snapshot.mjs
+              ;;
+            cgv-snapshot)
+              # queries 형식: "movNo:siteNo:scnYmd"
+              IFS=':' read -r mov site ymd <<< "${{ inputs.queries }}"
+              MOV_NO="$mov" SITE_NO="$site" SCN_YMD="$ymd" node cgv-snapshot.mjs
               ;;
             *-seat)
               QUERY='${{ inputs.queries }}' node ${{ inputs.site }}.mjs
