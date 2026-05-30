@@ -43,9 +43,10 @@ export async function GET(
     throw e;
   }
 
-  // 1) Cache hit?
+  // 1) Cache hit? — events index 도 함께 보강 (group detail 404 방지)
   const cached = await getCachedSearch(site, q.data);
   if (cached) {
+    await Promise.all(cached.map((e) => indexEvent(e).catch(() => null)));
     return NextResponse.json({ source: 'cache', entries: cached });
   }
 

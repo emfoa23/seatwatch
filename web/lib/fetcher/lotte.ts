@@ -2,15 +2,14 @@
  * Lotte Cinema fetcher — 회차/시간슬롯 단위.
  *
  * 검색: POST `LCAPI/Home/getMovie` → Movies.Items[].Items[]
- * 회차 + 잔여좌석: POST `LCWS/Ticketing/TicketingData.aspx` GetPlaySequence
+ * 극장 list: POST `LCWS/Cinema/CinemaData.aspx` GetCinemaItems → 239 극장
+ * 회차 + 잔여좌석: POST `LCWS/Ticketing/TicketingData.aspx` GetPlaySequence (cinemaID 필수)
  *   → PlaySeqs.Items[]: StartTime, EndTime, TotalSeatCount, BookingSeatCount
- *   → 잔여 = TotalSeatCount - BookingSeatCount
  *
- * cinemaID 필수 ("1|0001|<CinemaID>" 형식). representationMovieCode 만 보내면 빈 응답.
- * 따라서 snapshot 호출 시 cinemaID + representationMovieCode 둘 다 필요 → externalEventId 에 인코딩.
- *
- * externalEventId = `lotte_<repMovieCode>_<cinemaID>` 형식 — search 단계는 영화 단위라
- *   `lotte_<repMovieCode>` 만, UI 가 극장 picker 후 snapshot 호출 시 cinemaID 추가.
+ * snapshot 흐름:
+ *   1) externalEventId = `lotte_<repMovieCode>`
+ *   2) 인기 도시 극장 ~20개 만 GetPlaySequence 호출 (서울/수도권 + 광역시 중심)
+ *   3) 응답 합쳐 timeSlots[] 매핑
  */
 import type { SearchResult, SiteFetcher } from '.';
 import type { EventIndexEntry, SeatSnapshot, TimeSlot } from '@/lib/types/seat';
@@ -45,8 +44,23 @@ interface LottePlaySeqResp {
   PlaySeqs?: { Items?: LottePlaySeqItem[] };
 }
 
+interface LotteCinemaItem {
+  CinemaID?: number;
+  CinemaNameKR?: string;
+  SortSequence?: number;
+}
+
+interface LotteCinemaResp {
+  Cinemas?: { Items?: LotteCinemaItem[] };
+}
+
 const URL_GET_MOVIE = 'https://www.lottecinema.co.kr/LCAPI/Home/getMovie';
 const URL_TICKETING = 'https://www.lottecinema.co.kr/LCWS/Ticketing/TicketingData.aspx';
+const URL_CINEMA = 'https://www.lottecinema.co.kr/LCWS/Cinema/CinemaData.aspx';
+
+const MAX_CINEMAS = 25; // 인기 극장만 호출 (전체 239 의 SortSequence 상위)
+const CACHE_CINEMAS_KEY = '__lotte_cinemas_cache';
+let cinemasCache: { ts: number; items: LotteCinemaItem[] } | null = null;
 
 function parseReleaseDate(s?: string): string {
   if (!s) {
@@ -81,10 +95,44 @@ function moviesToEntries(items: LotteMovieItem[], query: string): EventIndexEntr
   return out;
 }
 
-/** "YYYY-MM-DD HH:MM" 형식 */
-function dtLabel(playDt?: string, startTime?: string): string {
+async function postForm(url: string, paramList: Record<string, unknown>): Promise<unknown> {
+  const body = new URLSearchParams({ paramList: JSON.stringify(paramList) }).toString();
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Referer: 'https://www.lottecinema.co.kr/NLCHS/Ticketing',
+      Accept: 'application/json',
+    },
+    body,
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`lotte ${paramList.MethodName} HTTP ${res.status}`);
+  return res.json();
+}
+
+async function getCinemas(): Promise<LotteCinemaItem[]> {
+  // process 메모리 cache 5분
+  if (cinemasCache && Date.now() - cinemasCache.ts < 5 * 60 * 1000) return cinemasCache.items;
+  void CACHE_CINEMAS_KEY;
+  const data = (await postForm(URL_CINEMA, {
+    MethodName: 'GetCinemaItems',
+    channelType: 'HO',
+    osType: 'W',
+    osVersion: 'Chrome',
+    multiLanguageID: 'KR',
+  })) as LotteCinemaResp;
+  const items = data?.Cinemas?.Items ?? [];
+  const sorted = items
+    .filter((c) => c.CinemaID && c.CinemaNameKR)
+    .sort((a, b) => (a.SortSequence ?? 999) - (b.SortSequence ?? 999));
+  cinemasCache = { ts: Date.now(), items: sorted };
+  return sorted;
+}
+
+function ymdLabel(playDt?: string, startTime?: string): string {
   if (!playDt) return startTime ?? '?';
-  // playDt 가 "2026-05-30T00:00:00" 같은 ISO 일 수도 있음
   const d = playDt.split('T')[0].split(' ')[0];
   return startTime ? `${d} ${startTime}` : d;
 }
@@ -115,77 +163,72 @@ export const lotteFetcher: SiteFetcher = {
   },
 
   /**
-   * snapshot — externalEventId 가 `lotte_<repMovieCode>_<cinemaID>` 형식이면 cinemaID 로 회차 조회.
-   * 아니면 (영화 단위) 빈 timeSlots 반환.
-   * 이 한계는 UI 가 극장 picker 후 snapshot 호출하는 패턴으로 해결.
+   * snapshot — 영화 단위 (externalEventId = lotte_<repMovieCode>) → 인기 극장들의 회차 list 합쳐 반환.
    */
   async snapshot(externalEventId: string, eventDatetime: string): Promise<SeatSnapshot> {
-    const id = externalEventId.startsWith('lotte_') ? externalEventId.slice(6) : externalEventId;
-    const parts = id.split('_');
-    const repCode = parts[0];
-    const cinemaID = parts[1];
-    if (!cinemaID) {
-      return {
-        site: 'lotte',
-        externalEventId,
-        eventDatetime,
-        capturedAt: new Date().toISOString(),
-        title: '',
-        venue: '롯데시네마',
-        timeSlots: [],
-      };
-    }
-    const playDate = eventDatetime.slice(0, 10);
-    const paramList = JSON.stringify({
-      MethodName: 'GetPlaySequence',
-      channelType: 'HO',
-      osType: 'W',
-      osVersion: 'Chrome',
-      multiLanguageID: 'KR',
-      playDate,
-      cinemaID: `1|0001|${cinemaID}`,
-      representationMovieCode: repCode,
-    });
-    // form-urlencoded `paramList=...`
-    const body = new URLSearchParams({ paramList }).toString();
-    const res = await fetch(URL_TICKETING, {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Referer: 'https://www.lottecinema.co.kr/NLCHS/Ticketing',
-        Accept: 'application/json',
-      },
-      body,
-      cache: 'no-store',
-    });
-    if (!res.ok) throw new Error(`lotte ticketing HTTP ${res.status}`);
-    const data = (await res.json()) as LottePlaySeqResp;
-    const items = data?.PlaySeqs?.Items ?? [];
+    const repCode = externalEventId.startsWith('lotte_')
+      ? externalEventId.slice(6).split('_')[0]
+      : externalEventId;
+    // eventDatetime 가 release date 일 경우 오늘부터 회차 조회
+    const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const requested = eventDatetime.slice(0, 10);
+    const playDate = requested >= todayKst ? requested : todayKst;
 
-    const timeSlots: TimeSlot[] = items
-      .filter((p) => p.StartTime && p.PlaySequence)
-      .map((p) => {
-        const remain = (p.TotalSeatCount ?? 0) - (p.BookingSeatCount ?? 0);
-        return {
-          slotId: `${p.CinemaID}-${p.ScreenID}-${p.PlaySequence}-${p.PlayDt ?? playDate}`,
-          time: dtLabel(p.PlayDt, p.StartTime),
-          remain: Math.max(0, remain),
-          capacity: p.TotalSeatCount ?? undefined,
-          available: remain > 0,
-          venue: p.CinemaNameKR,
-          screen: p.BrandNm_KR || p.ScreenDivisionNameKR,
-        };
-      });
+    const cinemas = await getCinemas();
+    const top = cinemas.slice(0, MAX_CINEMAS);
+    const allSlots: TimeSlot[] = [];
+    let movieName = '';
+
+    // 병렬 호출 (서버 부담 줄이려고 chunk)
+    const chunks: LotteCinemaItem[][] = [];
+    for (let i = 0; i < top.length; i += 5) chunks.push(top.slice(i, i + 5));
+
+    for (const chunk of chunks) {
+      const results = await Promise.all(
+        chunk.map((c) =>
+          postForm(URL_TICKETING, {
+            MethodName: 'GetPlaySequence',
+            channelType: 'HO',
+            osType: 'W',
+            osVersion: 'Chrome',
+            multiLanguageID: 'KR',
+            playDate,
+            cinemaID: `1|0001|${c.CinemaID}`,
+            representationMovieCode: repCode,
+          }).catch(() => null),
+        ),
+      );
+      for (const r of results) {
+        if (!r) continue;
+        const items = ((r as LottePlaySeqResp)?.PlaySeqs?.Items ?? []).filter(
+          (p) => p.StartTime && p.PlaySequence,
+        );
+        for (const p of items) {
+          if (!movieName) movieName = p.MovieNameKR ?? '';
+          const remain = (p.TotalSeatCount ?? 0) - (p.BookingSeatCount ?? 0);
+          allSlots.push({
+            slotId: `${p.CinemaID}-${p.ScreenID}-${p.PlaySequence}-${p.PlayDt ?? playDate}`,
+            time: ymdLabel(p.PlayDt, p.StartTime),
+            remain: Math.max(0, remain),
+            capacity: p.TotalSeatCount ?? undefined,
+            available: remain > 0,
+            venue: p.CinemaNameKR,
+            screen: p.BrandNm_KR || p.ScreenDivisionNameKR,
+          });
+        }
+      }
+    }
+
+    allSlots.sort((a, b) => a.time.localeCompare(b.time));
 
     return {
       site: 'lotte',
       externalEventId,
       eventDatetime,
       capturedAt: new Date().toISOString(),
-      title: items[0]?.MovieNameKR ?? '',
-      venue: items[0]?.CinemaNameKR ?? '롯데시네마',
-      timeSlots,
+      title: movieName,
+      venue: '롯데시네마',
+      timeSlots: allSlots,
     };
   },
 };
