@@ -1,29 +1,20 @@
 name: playwright-fetch
 
-# CGV 만 Playwright (Cloudflare + 동적 signature 우회 위함).
-# CatchTable 은 catchtable-fetch.yml (curl_cffi) 로 분리됨.
-
+# Discovery 전용 (사이트 traffic 분석). 운영 fetch 는 catchtable-fetch.yml / cgv-fetch.yml 로 분리됨.
 on:
   workflow_dispatch:
     inputs:
       site:
-        description: '실행 모드'
+        description: '대상 사이트 (cgv, megabox, lotte, interpark, catchtable)'
         required: true
-        type: choice
-        options:
-          - cgv
-          - discover
-      queries:
-        description: '검색어 (CSV) 또는 discover 시 "site:query"'
+        type: string
+      query:
+        description: '검색어'
         required: true
         type: string
 
-concurrency:
-  group: playwright-fetch-${{ inputs.site }}-${{ inputs.queries }}
-  cancel-in-progress: false
-
 jobs:
-  fetch:
+  discover:
     runs-on: ubuntu-latest
     timeout-minutes: 6
 
@@ -42,27 +33,18 @@ jobs:
           npm ci
           npx playwright install chromium --with-deps
 
-      - name: Run
+      - name: Discover
         working-directory: playwright-fetch
         env:
-          VALKEY_URL: ${{ secrets.VALKEY_URL }}
-          VALKEY_KEY_PREFIX: ${{ secrets.VALKEY_KEY_PREFIX }}
-        run: |
-          case "${{ inputs.site }}" in
-            discover)
-              IFS=':' read -r sub_site sub_query <<< "${{ inputs.queries }}"
-              SITE="$sub_site" QUERY="$sub_query" node discover.mjs
-              ;;
-            *)
-              QUERIES='${{ inputs.queries }}' node ${{ inputs.site }}.mjs
-              ;;
-          esac
+          SITE: ${{ inputs.site }}
+          QUERY: ${{ inputs.query }}
+        run: node discover.mjs
 
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-${{ inputs.site }}
+          name: playwright-discover-${{ inputs.site }}
           path: |
             playwright-fetch/*.png
             playwright-fetch/*.json

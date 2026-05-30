@@ -31,11 +31,13 @@ interface DispatchTarget {
   inputs: Record<string, string>;
 }
 
-/** site 별 workflow 라우팅. CatchTable 은 curl_cffi (catchtable-fetch.yml), 그 외는 Playwright. */
+/** site 별 workflow 라우팅. CatchTable/CGV 는 curl_cffi (Python), Playwright 는 fallback. */
 function targetFor(site: Site | string, mode: 'search' | 'snapshot', query: string): DispatchTarget {
-  if (site === 'catchtable' || site === 'catchtable-snapshot') {
-    const m: 'search' | 'snapshot' = site === 'catchtable-snapshot' ? 'snapshot' : mode;
-    return { workflow: 'catchtable-fetch.yml', inputs: { mode: m, queries: query } };
+  if (site === 'catchtable') {
+    return { workflow: 'catchtable-fetch.yml', inputs: { mode, queries: query } };
+  }
+  if (site === 'cgv') {
+    return { workflow: 'cgv-fetch.yml', inputs: { mode, queries: query } };
   }
   return { workflow: 'playwright-fetch.yml', inputs: { site: String(site), queries: query } };
 }

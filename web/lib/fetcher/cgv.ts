@@ -1,12 +1,17 @@
 /**
- * CGV fetcher — 검색만 결선 (Playwright workflow).
+ * CGV fetcher.
  *
- * Cloudflare WAF + dynamic signature + 좌석맵 Bearer/custNo 인증 으로 회차/좌석 결선 불가.
- * snapshot 호출 시 빈 timeSlots 반환 — UI 가 "외부에서 예매 페이지로" deep link 안내.
+ * Cloudflare WAF + 동적 x-signature 헤더로 Vercel 직접 호출 불가 →
+ * GitHub Actions `cgv-fetch.yml` (Python curl_cffi + HMAC-SHA256 signature
+ * 자체 생성, JS bundle 역공학) 가 우회.
+ *
+ * 검색/snapshot 모두 workflow_dispatch + Valkey 캐시 hit polling.
  */
 import type { SearchResult, SiteFetcher } from '.';
 import type { SeatSnapshot } from '@/lib/types/seat';
-import { dispatchAndWait } from './_dispatch';
+import { dispatchAndWait, dispatchSnapshot } from './_dispatch';
+import { getCachedSnapshot } from '@/lib/cache';
+import { getEventIndexEntry } from '@/lib/events';
 
 export const cgvFetcher: SiteFetcher = {
   async search(query: string): Promise<SearchResult> {
@@ -15,14 +20,13 @@ export const cgvFetcher: SiteFetcher = {
   },
 
   async snapshot(externalEventId: string, eventDatetime: string): Promise<SeatSnapshot> {
-    return {
-      site: 'cgv',
-      externalEventId,
-      eventDatetime,
-      capturedAt: new Date().toISOString(),
-      title: '',
-      venue: 'CGV',
-      timeSlots: [],
-    };
+    const cached = await getCachedSnapshot('cgv', externalEventId, eventDatetime);
+    if (cached) return cached;
+    const entry = await getEventIndexEntry('cgv', externalEventId);
+    const movNo = entry?.meta?.movNo;
+    if (!movNo) {
+      throw new Error('cgv movNo 미상 — 검색을 먼저 실행해주세요');
+    }
+    return dispatchSnapshot('cgv', movNo, externalEventId, eventDatetime, { cacheSite: 'cgv' });
   },
 };

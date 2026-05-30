@@ -185,6 +185,15 @@ def do_snapshot(s: requests.Session, r: redis.Redis, shop_ref: str) -> bool:
         ex=60 * 5,
     )
     r.set(f'{PREFIX}:freshness:catchtable:{eid}', captured)
+    # events index 의 entry.eventDatetime 도 today 로 동기화
+    raw = r.hget(f'{PREFIX}:events:catchtable', eid)
+    if raw:
+        try:
+            entry = json.loads(raw)
+            entry['eventDatetime'] = dt_iso
+            r.hset(f'{PREFIX}:events:catchtable', eid, json.dumps(entry, ensure_ascii=False))
+        except Exception:
+            pass
     print(f'  slots={len(slots)} eid={eid}')
     return True
 
