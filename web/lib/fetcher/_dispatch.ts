@@ -25,13 +25,31 @@ export class PendingError extends Error {
 const OWNER = process.env.GITHUB_OWNER ?? 'emfoa23';
 const REPO = process.env.GITHUB_REPO ?? 'seatwatch';
 const TOKEN = process.env.GITHUB_DISPATCH_TOKEN;
-const WORKFLOW_FILE = 'playwright-fetch.yml';
 
-async function triggerWorkflow(site: Site | string, query: string): Promise<void> {
+interface DispatchTarget {
+  workflow: string;
+  inputs: Record<string, string>;
+}
+
+/** site 별 workflow 라우팅. CatchTable 은 curl_cffi (catchtable-fetch.yml), 그 외는 Playwright. */
+function targetFor(site: Site | string, mode: 'search' | 'snapshot', query: string): DispatchTarget {
+  if (site === 'catchtable' || site === 'catchtable-snapshot') {
+    const m: 'search' | 'snapshot' = site === 'catchtable-snapshot' ? 'snapshot' : mode;
+    return { workflow: 'catchtable-fetch.yml', inputs: { mode: m, queries: query } };
+  }
+  return { workflow: 'playwright-fetch.yml', inputs: { site: String(site), queries: query } };
+}
+
+async function triggerWorkflow(
+  site: Site | string,
+  query: string,
+  mode: 'search' | 'snapshot' = 'search',
+): Promise<void> {
   if (!TOKEN) {
     throw new Error('GITHUB_DISPATCH_TOKEN 미설정 — Vercel env 에 PAT 등록 필요');
   }
-  const url = `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`;
+  const tgt = targetFor(site, mode, query);
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${tgt.workflow}/dispatches`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -40,10 +58,7 @@ async function triggerWorkflow(site: Site | string, query: string): Promise<void
       'X-GitHub-Api-Version': '2022-11-28',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      ref: 'main',
-      inputs: { site, queries: query },
-    }),
+    body: JSON.stringify({ ref: 'main', inputs: tgt.inputs }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -91,12 +106,16 @@ export async function dispatchAndWait(
 }
 
 /**
- * Snapshot 용 dispatch — workflow 가 (예: catchtable-snapshot) shopRef 받아 timeslot 적재.
- * lock 은 (workflowSite, externalEventId) 단위. 캐시 hit 까지 polling.
+ * Snapshot 용 dispatch.
+ * @param workflowSite — fetcher 식별자 (workflow 라우팅용, 예: 'catchtable')
+ * @param workflowArg — workflow inputs.queries 로 전달 (예: shopRef)
+ * @param cacheEid — cache hit polling 시 사용할 externalEventId (entry hash)
+ * @param eventDatetime — cache key 의 datetime 부분
  */
 export async function dispatchSnapshot(
   workflowSite: string,
-  externalEventId: string,
+  workflowArg: string,
+  cacheEid: string,
   eventDatetime: string,
   opts: { holdoff?: number; pollMs?: number; maxWaitMs?: number; cacheSite?: Site } = {},
 ): Promise<SeatSnapshot> {
@@ -105,11 +124,11 @@ export async function dispatchSnapshot(
   const maxWaitMs = opts.maxWaitMs ?? 25_000;
   const cacheSite = opts.cacheSite ?? 'catchtable';
 
-  const lockKey = `dispatch:${workflowSite}:${externalEventId}`;
+  const lockKey = `dispatch:${workflowSite}:${workflowArg}`;
   const acquired = await valkey.set(lockKey, '1', 'EX', holdoff, 'NX');
   if (acquired === 'OK') {
     try {
-      await triggerWorkflow(workflowSite, externalEventId);
+      await triggerWorkflow(workflowSite, workflowArg, 'snapshot');
     } catch (e) {
       await valkey.del(lockKey);
       throw e;
@@ -118,10 +137,10 @@ export async function dispatchSnapshot(
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, pollMs));
-    const cached = await getCachedSnapshot(cacheSite, externalEventId, eventDatetime);
+    const cached = await getCachedSnapshot(cacheSite, cacheEid, eventDatetime);
     if (cached) return cached;
   }
   throw new PendingError(
-    `좌석/타임슬롯 수집 중 — 잠시 후 다시 시도 (${workflowSite}/${externalEventId})`,
+    `좌석/타임슬롯 수집 중 — 잠시 후 다시 시도 (${workflowSite}/${workflowArg})`,
   );
 }

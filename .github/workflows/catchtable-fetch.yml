@@ -1,0 +1,56 @@
+name: catchtable-fetch
+
+# CatchTable curl_cffi (Chrome131 TLS impersonate) — Cloudflare WAF 우회.
+# Playwright (30-60s cold start) 대비 1-2초 호출.
+#
+# workflow_dispatch 모드:
+#   mode=search,    queries="모수,정식당"          → search 캐시 + events:catchtable 적재
+#   mode=snapshot,  queries="qz7oA...,xxxxxx"     → day-slots 캐시 (SHOP_REFS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '모드'
+        required: true
+        type: choice
+        options:
+          - search
+          - snapshot
+      queries:
+        description: '검색어 또는 SHOP_REFS (CSV)'
+        required: true
+        type: string
+
+concurrency:
+  group: catchtable-fetch-${{ inputs.mode }}-${{ inputs.queries }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: Install deps
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run catchtable fetch
+        env:
+          VALKEY_URL: ${{ secrets.VALKEY_URL }}
+          VALKEY_KEY_PREFIX: ${{ secrets.VALKEY_KEY_PREFIX }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "${{ inputs.mode }}" = "search" ]; then
+            QUERIES='${{ inputs.queries }}' python scripts/catchtable_fetch.py
+          else
+            SHOP_REFS='${{ inputs.queries }}' python scripts/catchtable_fetch.py
+          fi

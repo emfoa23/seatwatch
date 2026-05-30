@@ -1,11 +1,7 @@
 name: playwright-fetch
 
-# Playwright + Chromium 으로 Cloudflare WAF 우회 → 실 endpoint 호출 → Valkey 적재 / endpoint discover.
-#
-# 모드:
-#   - cgv / catchtable: search 데이터 fetch (page.evaluate)
-#   - catchtable-snapshot: 특정 식당 timeslot 적재 (SHOP_REFS CSV)
-#   - discover: 사이트 traffic 분석 (queries="<site>:<query>")
+# CGV 만 Playwright (Cloudflare + 동적 signature 우회 위함).
+# CatchTable 은 catchtable-fetch.yml (curl_cffi) 로 분리됨.
 
 on:
   workflow_dispatch:
@@ -16,11 +12,9 @@ on:
         type: choice
         options:
           - cgv
-          - catchtable
-          - catchtable-snapshot
           - discover
       queries:
-        description: '검색어 (CSV), discover 시 "site:query", catchtable-snapshot 시 SHOP_REFS CSV'
+        description: '검색어 (CSV) 또는 discover 시 "site:query"'
         required: true
         type: string
 
@@ -58,9 +52,6 @@ jobs:
             discover)
               IFS=':' read -r sub_site sub_query <<< "${{ inputs.queries }}"
               SITE="$sub_site" QUERY="$sub_query" node discover.mjs
-              ;;
-            catchtable-snapshot)
-              SHOP_REFS='${{ inputs.queries }}' node catchtable-snapshot.mjs
               ;;
             *)
               QUERIES='${{ inputs.queries }}' node ${{ inputs.site }}.mjs
