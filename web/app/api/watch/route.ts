@@ -9,27 +9,11 @@ const bodySchema = z.object({
   site: z.enum(['cgv', 'megabox', 'lotte', 'interpark', 'catchtable']),
   externalEventId: z.string().min(1),
   eventDatetime: z.string().min(1),
-  seatSelector: z.union([
-    z.object({
-      type: z.literal('multi'),
-      values: z.array(z.string().min(1)).min(1).max(20),
-      mode: z.literal('seat'),
-      adjacency: z.number().int().min(1).max(10).default(1),
-    }),
-    z.object({
-      type: z.literal('multi'),
-      values: z.array(z.string().min(1)).min(1).max(20),
-      mode: z.literal('time'),
-      partySize: z.number().int().min(1).max(10).default(1),
-    }),
-    z.object({
-      type: z.enum(['seat', 'time', 'grade', 'row', 'any']),
-      id: z.string().optional(),
-      time: z.string().optional(),
-      grade: z.string().optional(),
-      row: z.string().optional(),
-    }),
-  ]),
+  /** 회차/시간슬롯 단위 알림 selector */
+  seatSelector: z.object({
+    kind: z.literal('time'),
+    values: z.array(z.string().min(1)).min(1).max(20),
+  }),
 });
 
 export async function POST(req: NextRequest) {

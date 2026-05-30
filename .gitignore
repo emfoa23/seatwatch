@@ -41,3 +41,6 @@ drizzle/meta/
 logs/
 *.log
 .env.local.swp
+
+# Claude Code session config
+.claude/

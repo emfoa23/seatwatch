@@ -8,21 +8,15 @@ interface Props {
   site: Site;
   externalEventId: string;
   eventDatetime: string;
-  selectorMode: 'seat' | 'time';
-  maxParty?: number;
   children: ReactNode;
 }
 
-const MAX_SEATS = 20;
-const MAX_OPT = 10;
+const MAX_SLOTS = 20;
 
-export function WatchHandler({ site, externalEventId, eventDatetime, selectorMode, maxParty, children }: Props) {
-  const partyCap = Math.min(MAX_OPT, maxParty ?? MAX_OPT);
+export function WatchHandler({ site, externalEventId, eventDatetime, children }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<string[]>([]);
-  const [adjacency, setAdjacency] = useState(1);
-  const [partySize, setPartySize] = useState(2);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ kind: 'ok' | 'err' | 'info'; text: string } | null>(null);
 
@@ -34,17 +28,16 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
     const status = target.dataset.watchStatus;
     if (!value) return;
     if (status !== 'occupied') {
-      setToast({ kind: 'info', text: '예매가능 자리는 알림이 필요 없습니다.' });
+      setToast({ kind: 'info', text: '이미 예매 가능한 회차입니다. 알림이 필요 없습니다.' });
       return;
     }
-
     setSelected((prev) => {
       if (prev.includes(value)) {
         target.dataset.watchSelected = '';
         return prev.filter((v) => v !== value);
       }
-      if (prev.length >= MAX_SEATS) {
-        setToast({ kind: 'err', text: `최대 ${MAX_SEATS}석까지 선택 가능합니다.` });
+      if (prev.length >= MAX_SLOTS) {
+        setToast({ kind: 'err', text: `최대 ${MAX_SLOTS}개 회차까지 선택 가능합니다.` });
         return prev;
       }
       target.dataset.watchSelected = '1';
@@ -61,20 +54,13 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
 
   async function submit() {
     if (selected.length === 0) {
-      setToast({ kind: 'err', text: '좌석을 1개 이상 선택하세요.' });
+      setToast({ kind: 'err', text: '회차/시간을 1개 이상 선택하세요.' });
       return;
     }
-    if (!confirm(
-      `${selected.length}개 ${selectorMode === 'seat' ? '좌석' : '시간대'} 알림을 등록할까요?` +
-      (selectorMode === 'seat' && adjacency > 1 ? `\n조건: ${adjacency}명 연속 자리 발생 시 알림` : '') +
-      (selectorMode === 'time' ? `\n예약 인원: ${partySize}명` : '')
-    )) return;
+    if (!confirm(`${selected.length}개 회차에 빈자리 알림을 등록할까요?`)) return;
 
     setSubmitting(true);
-    const seatSelector = selectorMode === 'seat'
-      ? { type: 'multi' as const, values: selected, mode: 'seat' as const, adjacency }
-      : { type: 'multi' as const, values: selected, mode: 'time' as const, partySize };
-
+    const seatSelector = { kind: 'time' as const, values: selected };
     const res = await fetch('/api/watch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -100,10 +86,7 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
       return;
     }
     if (res.ok) {
-      setToast({
-        kind: 'ok',
-        text: `알림 등록 완료! 빈자리 발생 시 메일로 안내드립니다.`,
-      });
+      setToast({ kind: 'ok', text: '알림 등록 완료! 빈자리 발생 시 메일로 안내드립니다.' });
       clearSelection();
       startTransition(() => router.refresh());
       return;
@@ -125,39 +108,18 @@ export function WatchHandler({ site, externalEventId, eventDatetime, selectorMod
 
       <div className="watch-panel">
         <div className="watch-panel-info">
-          <strong>선택 {selected.length} / {MAX_SEATS}</strong>
-          <span className="dim">{selected.length === 0 ? '마감된 자리를 클릭해서 선택하세요' : selected.join(', ')}</span>
+          <strong>선택 {selected.length} / {MAX_SLOTS}</strong>
+          <span className="dim">
+            {selected.length === 0 ? '매진된 회차를 클릭해서 선택하세요' : selected.join(', ')}
+          </span>
         </div>
-        {selectorMode === 'seat' ? (
-          <label className="adj-input">
-            <span>붙은 자리 수</span>
-            <select
-              value={adjacency}
-              onChange={(e) => setAdjacency(Number(e.target.value))}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {Array.from({ length: MAX_OPT }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>{n}명 {n === 1 ? '(단일 자리)' : '연속'}</option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <label className="adj-input">
-            <span>예약 인원 (최대 {partyCap}명)</span>
-            <select
-              value={Math.min(partySize, partyCap)}
-              onChange={(e) => setPartySize(Number(e.target.value))}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {Array.from({ length: partyCap }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>{n}명</option>
-              ))}
-            </select>
-          </label>
-        )}
         <div className="watch-panel-actions">
           {selected.length > 0 && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); clearSelection(); }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={(e) => { e.stopPropagation(); clearSelection(); }}
+            >
               초기화
             </button>
           )}

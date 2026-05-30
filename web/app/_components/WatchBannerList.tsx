@@ -5,14 +5,9 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { WatchContext } from '@/lib/watch-context';
 
 function summarize(ctx: WatchContext): string {
-  if (ctx.selectorKind === 'multi-time') {
-    return `시간대 ${ctx.registered.join(', ')} · ${ctx.partySize ?? 1}명 예약`;
-  }
-  if (ctx.selectorKind === 'multi-seat') {
-    const adj = (ctx.adjacency ?? 1) > 1 ? ` · ${ctx.adjacency}명 연속` : '';
-    return `좌석 ${ctx.registered.join(', ')}${adj}`;
-  }
-  return ctx.registered.join(', ') || '-';
+  return ctx.registered.length === 0
+    ? '-'
+    : `회차 ${ctx.registered.length}개 알림`;
 }
 
 export function WatchBannerList({ contexts }: { contexts: WatchContext[] }) {

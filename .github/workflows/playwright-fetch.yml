@@ -1,12 +1,11 @@
 name: playwright-fetch
 
-# Playwright + Chromium 으로 Cloudflare WAF 우회 → 실 endpoint 호출 → Valkey 적재 또는 endpoint discovery.
+# Playwright + Chromium 으로 Cloudflare WAF 우회 → 실 endpoint 호출 → Valkey 적재 / endpoint discover.
 #
 # 모드:
-#   - cgv / catchtable: search 데이터 fetch (이미 결선)
-#   - discover: home → search → 상세 → 예매 navigate (endpoint URL 들 dump)
-#   - seat-<site> (cgv-seat / megabox-seat / lotte-seat / interpark-seat / catchtable-seat):
-#       site-specific booking flow → 좌석 페이지까지 navigate + endpoint capture
+#   - cgv / catchtable: search 데이터 fetch (page.evaluate)
+#   - catchtable-snapshot: 특정 식당 timeslot 적재 (SHOP_REFS CSV)
+#   - discover: 사이트 traffic 분석 (queries="<site>:<query>")
 
 on:
   workflow_dispatch:
@@ -19,13 +18,7 @@ on:
           - cgv
           - catchtable
           - catchtable-snapshot
-          - cgv-snapshot
           - discover
-          - cgv-seat
-          - megabox-seat
-          - lotte-seat
-          - interpark-seat
-          - catchtable-seat
       queries:
         description: '검색어 (CSV), discover 시 "site:query", catchtable-snapshot 시 SHOP_REFS CSV'
         required: true
@@ -38,7 +31,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 6
 
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +48,7 @@ jobs:
           npm ci
           npx playwright install chromium --with-deps
 
-      - name: Run fetch / discover / seat
+      - name: Run
         working-directory: playwright-fetch
         env:
           VALKEY_URL: ${{ secrets.VALKEY_URL }}
@@ -64,19 +57,10 @@ jobs:
           case "${{ inputs.site }}" in
             discover)
               IFS=':' read -r sub_site sub_query <<< "${{ inputs.queries }}"
-              echo "discover site=$sub_site query=$sub_query"
               SITE="$sub_site" QUERY="$sub_query" node discover.mjs
               ;;
             catchtable-snapshot)
               SHOP_REFS='${{ inputs.queries }}' node catchtable-snapshot.mjs
-              ;;
-            cgv-snapshot)
-              # queries 형식: "movNo:siteNo:scnYmd"
-              IFS=':' read -r mov site ymd <<< "${{ inputs.queries }}"
-              MOV_NO="$mov" SITE_NO="$site" SCN_YMD="$ymd" node cgv-snapshot.mjs
-              ;;
-            *-seat)
-              QUERY='${{ inputs.queries }}' node ${{ inputs.site }}.mjs
               ;;
             *)
               QUERIES='${{ inputs.queries }}' node ${{ inputs.site }}.mjs

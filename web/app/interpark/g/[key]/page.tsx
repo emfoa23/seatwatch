@@ -8,9 +8,9 @@ export default async function InterparkGroup({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ eid?: string; day?: string; screen?: string; watch?: string }>;
+  searchParams: Promise<{ watch?: string }>;
 }) {
   const { key } = await params;
-  const { eid, day, screen, watch } = await searchParams;
-  return <GroupDetail site="interpark" groupKey={decodeGroupKey(key)} eid={eid} day={day} screen={screen} watch={watch} />;
+  const { watch } = await searchParams;
+  return <GroupDetail site="interpark" groupKey={decodeGroupKey(key)} watch={watch} />;
 }
